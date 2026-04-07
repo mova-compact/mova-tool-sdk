@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import os
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+from urllib.parse import urlparse
 
 from .config import DEFAULT_BASE_URL
 from .contracts import load_runtime_manifest, load_source_contract_package
@@ -18,6 +22,56 @@ class MovaClient:
     admin_read_token: str | None = None
     runtime_execute_token: str | None = None
     operator_recovery_token: str | None = None
+
+    def _gateway_credentials(self, scope: str) -> dict[str, str] | None:
+        if scope != "admin_read":
+            return None
+        key_id = os.environ.get("MCP_DOOR_GATEWAY_KEY_ID")
+        shared_secret = os.environ.get("MCP_DOOR_GATEWAY_SHARED_SECRET")
+        actor_id = os.environ.get("MCP_DOOR_ACTOR_ID")
+        actor_role = os.environ.get("MCP_DOOR_ACTOR_ROLE")
+        actor_type = os.environ.get("MCP_DOOR_ACTOR_TYPE") or "human"
+        if not key_id or not shared_secret or not actor_id or not actor_role:
+            return None
+        return {
+            "key_id": key_id,
+            "shared_secret": shared_secret,
+            "actor_id": actor_id,
+            "actor_role": actor_role,
+            "actor_type": actor_type,
+        }
+
+    def _build_gateway_headers(self, url: str, method: str, scope: str) -> dict[str, str]:
+        creds = self._gateway_credentials(scope)
+        if not creds:
+            return {}
+        timestamp = str(int(time.time()))
+        path = urlparse(url).path or "/"
+        payload = "\n".join(
+            [
+                "mova-admin-gateway-v1",
+                timestamp,
+                method.upper(),
+                path,
+                scope,
+                creds["actor_id"],
+                creds["actor_role"],
+                creds["actor_type"],
+            ]
+        )
+        signature = hmac.new(
+            creds["shared_secret"].encode("utf-8"),
+            payload.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+        return {
+            "x-mova-gateway-key-id": creds["key_id"],
+            "x-mova-gateway-timestamp": timestamp,
+            "x-mova-gateway-signature": signature,
+            "x-mova-actor-id": creds["actor_id"],
+            "x-mova-actor-role": creds["actor_role"],
+            "x-mova-actor-type": creds["actor_type"],
+        }
 
     def _token_for_scope(self, scope: str) -> str | None:
         if scope == "admin_read":
@@ -35,21 +89,28 @@ class MovaClient:
         payload: dict[str, object] | None = None,
         scope: str = "runtime_execute",
     ) -> dict[str, object]:
+        url = f"{self.base_url.rstrip('/')}{path}"
+        headers = {"content-type": "application/json"}
         prepared = {
             "method": method,
-            "url": f"{self.base_url.rstrip('/')}{path}",
+            "url": url,
             "payload": payload,
             "scope": scope,
+            "headers": headers,
         }
+        headers.update(self._build_gateway_headers(url, method, scope))
         if self.dry_run:
+            prepared["headers"] = headers
             return {"ok": True, "status": "dry-run", "prepared_request": prepared}
 
         data = json.dumps(payload).encode("utf-8") if payload is not None else None
         request = urllib.request.Request(prepared["url"], data=data, method=method)
-        request.add_header("content-type", "application/json")
         token = self._token_for_scope(scope)
         if token:
-            request.add_header("authorization", f"Bearer {token}")
+            headers["authorization"] = f"Bearer {token}"
+        prepared["headers"] = headers
+        for header_name, header_value in headers.items():
+            request.add_header(header_name, header_value)
         try:
             with urllib.request.urlopen(request) as response:
                 raw = response.read().decode("utf-8")

@@ -53,6 +53,8 @@ def load_config(path: Path = CONFIG_PATH) -> MovaConfig:
     config.base_url = (
         os.environ.get("MOVA_PLATFORM_URL")
         or os.environ.get("MOVA_BASE_URL")
+        or os.environ.get("MCP_DOOR_BASE_URL")
+        or os.environ.get("MOVA_DOOR_BASE_URL")
         or config.base_url
         or DEFAULT_BASE_URL
     )

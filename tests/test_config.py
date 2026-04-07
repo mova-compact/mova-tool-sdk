@@ -19,8 +19,18 @@ def test_load_config_prefers_platform_url(monkeypatch):
 def test_load_config_defaults_without_env(monkeypatch):
     monkeypatch.delenv("MOVA_BASE_URL", raising=False)
     monkeypatch.delenv("MOVA_PLATFORM_URL", raising=False)
+    monkeypatch.delenv("MCP_DOOR_BASE_URL", raising=False)
+    monkeypatch.delenv("MOVA_DOOR_BASE_URL", raising=False)
     config = load_config(Path("tests") / "_missing_config.json")
     assert config.base_url == DEFAULT_BASE_URL
+
+
+def test_load_config_accepts_existing_mcp_door_url_alias(monkeypatch):
+    monkeypatch.delenv("MOVA_PLATFORM_URL", raising=False)
+    monkeypatch.delenv("MOVA_BASE_URL", raising=False)
+    monkeypatch.setenv("MCP_DOOR_BASE_URL", "https://engine15.example.workers.dev")
+    config = load_config(Path("tests") / "_missing_config.json")
+    assert config.base_url == "https://engine15.example.workers.dev"
 
 
 def test_mova_home_uses_env_override(monkeypatch):

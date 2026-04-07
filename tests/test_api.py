@@ -56,3 +56,18 @@ def test_public_api_exposes_lab_run_dry_run():
     assert result["ok"] is True
     assert result["status"] == "dry-run"
     assert result["prepared_request"]["url"].endswith("/v0/lab/runs")
+
+
+def test_admin_read_dry_run_can_prepare_gateway_headers(monkeypatch):
+    monkeypatch.setenv("MCP_DOOR_GATEWAY_KEY_ID", "gw_test")
+    monkeypatch.setenv("MCP_DOOR_GATEWAY_SHARED_SECRET", "secret_test")
+    monkeypatch.setenv("MCP_DOOR_ACTOR_ID", "principal.test")
+    monkeypatch.setenv("MCP_DOOR_ACTOR_ROLE", "admin")
+    monkeypatch.setenv("MCP_DOOR_ACTOR_TYPE", "human")
+    client = Mova(dry_run=True, api_key="demo")
+    result = client.list_authoring_forms()
+    headers = result["prepared_request"]["headers"]
+    assert result["ok"] is True
+    assert headers["x-mova-gateway-key-id"] == "gw_test"
+    assert headers["x-mova-actor-id"] == "principal.test"
+    assert "x-mova-gateway-signature" in headers
