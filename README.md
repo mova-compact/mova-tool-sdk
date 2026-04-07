@@ -2,11 +2,11 @@
 
 Python-first MOVA SDK scaffold.
 
-`mova-tool-sdk` is the new SDK layer above the MOVA platform:
+`mova-tool-sdk` is the thin Python SDK layer above the MOVA platform:
 
-- CLI for humans
+- local soft-entry CLI
 - Python API for programmatic integration
-- future MCP/native tool mode for agents
+- client access to the existing `mcp_door` / state-machine surface
 
 This repo is intentionally separate from the legacy `mova_sdk` and from `mova-bridge`.
 
@@ -16,38 +16,23 @@ Version `0.1.0` starts with the shared base:
 
 - config loading and persistence
 - auth key management
-- local contract-package validation
-- local contract-package inspection
-- HTTP client scaffold for future platform calls
-- CLI command groups matching the new SDK spec
+- local candidate-package validation
+- local candidate-package inspection
+- local `Forge` candidate generation
+- thin client calls into the current platform surface
 
 ## Current command groups
 
-- `mova register`
 - `mova auth set-key`
 - `mova auth check`
 - `mova auth whoami`
-- `mova publish`
 - `mova forge`
 - `mova validate`
 - `mova inspect`
 - `mova execute`
 - `mova status`
-- `mova runs list`
-- `mova decisions pending`
 - `mova decide`
 - `mova audit`
-- `mova connectors list`
-- `mova connectors add`
-- `mova connectors remove`
-- `mova connectors test`
-- `mova connectors registered`
-- `mova contracts list`
-- `mova contracts pull`
-- `mova usage`
-- `mova plan`
-- `mova cost`
-- `mova serve --mode mcp`
 
 ## Contract package canon
 
@@ -63,13 +48,12 @@ The SDK currently validates the following package files:
 
 ## Status
 
-This is the new canonical SDK scaffold.
-The first remote slice is already wired against the current platform through a temporary bridge-compatible adapter inside the client:
+This is the new canonical soft-entry SDK scaffold.
+The current role of the SDK is intentionally narrow:
 
-- `mova execute` registers a local contract package and starts a run
-- `mova status` reads run state
-- `mova audit` exports the run audit bundle
-- `mova decide` maps to operator approve/deny actions
+- local AI-guided calibration will eventually end at a candidate contract package
+- the platform lifecycle after that remains inside `mova-state-1.5`
+- the SDK should connect to existing platform endpoints instead of inventing a second authoring/runtime layer
 
 Canonical config/env language now follows the SDK spec:
 
@@ -97,15 +81,15 @@ forge = Forge()
 session = forge.start(intent="automate invoice processing")
 ```
 
-`Mova` is the canonical public API shape. Internally it still adapts to the current route surface while the platform SDK endpoints are being finalized.
+`Mova` is the canonical public API shape. The client is transitional and must progressively align to existing `mcp_door` endpoints rather than define new lifecycle layers from outside.
 
-## First Forge slice
+## Forge Boundary
 
-`Forge` is no longer a placeholder. The current first slice supports:
+`Forge` stays local and light. Its purpose is:
 
-- turning an `intent` into a first-pass crystallized contract shape
-- generating a canonical `contract_package_v0` to disk
-- seeding the flow from an existing package directory with `--from`
+- turn a business intent into a canonical candidate package
+- let the user review that candidate locally
+- hand the candidate off into the real platform contour for authoring draft, lab testing, and promotion
 
 Example:
 
@@ -113,17 +97,9 @@ Example:
 mova forge --intent "automate invoice processing with human approval" --output ./my-contract
 ```
 
-Forge sessions can now be resumed locally:
+Current expected flow:
 
-```bash
-mova forge --intent "automate invoice processing with human approval"
-mova forge sessions
-mova forge resume <session_id>
-mova forge commit <session_id> result-definition --reason "Need a bounded finance review contract"
-```
-
-This first slice is intentionally review-first:
-
-- generated packages default to `DRAFT_REVIEW`
-- connector bindings are placeholders until the author hardens them
-- publication and execution remain separate downstream steps
+1. `mova forge ...`
+2. receive candidate package locally
+3. hand off candidate into platform flow
+4. platform performs authoring draft / lab / promotion

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .client import MovaClient
 from .config import MovaConfig, load_config, save_config
-from .forge import load_forge_session, list_forge_sessions, normalize_choice, start_forge
+from .forge import start_forge
 from .contracts import inspect_contract_package, validate_contract_package
 
 
@@ -26,44 +26,10 @@ def _print(payload: dict[str, object]) -> int:
     return 0 if payload.get("ok", True) else 1
 
 
-def _format_step_payload(session_id: str, step: dict[str, object], answers: dict[str, object]) -> dict[str, object]:
-    return {
-        "ok": True,
-        "status": step.get("status", "in_progress"),
-        "session_id": session_id,
-        "step": {
-            "id": step.get("step_id"),
-            "index": step.get("index"),
-            "total_steps": step.get("total_steps"),
-            "observation": step.get("observation"),
-            "recommendation": step.get("recommendation"),
-            "options": step.get("options", []),
-            "option_items": step.get("option_items", []),
-        },
-        "known_answers": answers,
-        "contract_shape": step.get("contract_shape"),
-        "usage_hint": {
-            "resume": f"mova forge resume {session_id}",
-            "commit": f"mova forge commit {session_id} <choice> --reason \"...\"",
-            "generate": f"mova forge generate {session_id} --output ./my-contract",
-        },
-    }
-
-
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="mova")
     parser.add_argument("--dry-run", action="store_true")
     sub = parser.add_subparsers(dest="command")
-
-    register = sub.add_parser("register")
-    register.add_argument("--email", required=True)
-
-    publish = sub.add_parser("publish")
-    visibility = publish.add_mutually_exclusive_group(required=True)
-    visibility.add_argument("--private", action="store_true")
-    visibility.add_argument("--public", action="store_true")
-    publish.add_argument("path")
-    publish.add_argument("--owner-id")
 
     auth = sub.add_parser("auth")
     auth_sub = auth.add_subparsers(dest="auth_command")
@@ -76,36 +42,9 @@ def build_parser() -> argparse.ArgumentParser:
     auth_sub.add_parser("whoami")
 
     forge = sub.add_parser("forge")
-    forge.add_argument("--intent")
+    forge.add_argument("--intent", required=True)
     forge.add_argument("--from")
     forge.add_argument("--output")
-    forge_sub = forge.add_subparsers(dest="forge_command")
-    forge_start = forge_sub.add_parser("start")
-    forge_start.add_argument("--intent")
-    forge_start.add_argument("--from")
-    forge_start.add_argument("--output")
-    forge_resume = forge_sub.add_parser("resume")
-    forge_resume.add_argument("session_id")
-    forge_next = forge_sub.add_parser("next")
-    forge_next.add_argument("session_id")
-    forge_back = forge_sub.add_parser("back")
-    forge_back.add_argument("session_id")
-    forge_back.add_argument("--steps", type=int, default=1)
-    forge_review = forge_sub.add_parser("review")
-    forge_review.add_argument("session_id")
-    forge_review.add_argument("--confirm", action="store_true")
-    forge_summary = forge_sub.add_parser("summary")
-    forge_summary.add_argument("session_id")
-    forge_commit = forge_sub.add_parser("commit")
-    forge_commit.add_argument("session_id")
-    forge_commit.add_argument("choice")
-    forge_commit.add_argument("--reason", required=True)
-    forge_generate = forge_sub.add_parser("generate")
-    forge_generate.add_argument("session_id")
-    forge_generate.add_argument("--output", required=True)
-    forge_generate.add_argument("--force", action="store_true")
-    forge_sessions = forge_sub.add_parser("sessions")
-    forge_sessions.add_argument("--all", action="store_true")
 
     validate = sub.add_parser("validate")
     validate.add_argument("path")
@@ -131,52 +70,12 @@ def build_parser() -> argparse.ArgumentParser:
     decide.add_argument("option")
     decide.add_argument("--reason", required=True)
 
-    decisions = sub.add_parser("decisions")
-    decisions_sub = decisions.add_subparsers(dest="decisions_command")
-    decisions_sub.add_parser("pending")
-
     audit = sub.add_parser("audit")
     audit.add_argument("run_id")
     audit.add_argument("--compact", action="store_true")
     audit.add_argument("--raw", action="store_true")
     audit.add_argument("--export")
     audit.add_argument("--verify", action="store_true")
-
-    connectors = sub.add_parser("connectors")
-    connectors_sub = connectors.add_subparsers(dest="connectors_command")
-    connectors_sub.add_parser("list")
-    connectors_sub.add_parser("registered")
-    connectors_test = connectors_sub.add_parser("test")
-    connectors_test.add_argument("connector_id")
-    connectors_add = connectors_sub.add_parser("add")
-    connectors_add.add_argument("--id", required=True)
-    connectors_add.add_argument("--url", required=True)
-    connectors_add.add_argument("--auth", required=True)
-    connectors_add.add_argument("--token")
-    connectors_remove = connectors_sub.add_parser("remove")
-    connectors_remove.add_argument("connector_id")
-
-    contracts = sub.add_parser("contracts")
-    contracts_sub = contracts.add_subparsers(dest="contracts_command")
-    contracts_sub.add_parser("list")
-    contracts_pull = contracts_sub.add_parser("pull")
-    contracts_pull.add_argument("contract_id")
-
-    usage = sub.add_parser("usage")
-    usage.add_argument("--from")
-    usage.add_argument("--to")
-
-    sub.add_parser("plan")
-
-    cost = sub.add_parser("cost")
-    cost.add_argument("run_id")
-
-    runs = sub.add_parser("runs")
-    runs_sub = runs.add_subparsers(dest="runs_command")
-    runs_sub.add_parser("list")
-
-    serve = sub.add_parser("serve")
-    serve.add_argument("--mode", required=True)
 
     return parser
 
@@ -185,21 +84,6 @@ def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
     config = load_config()
-
-    if args.command == "register":
-        result = _client(config, args.dry_run).register(args.email)
-        return _print(result)
-
-    if args.command == "publish":
-        owner_id = args.owner_id or config.default_owner_id
-        if not owner_id:
-            return _print({"ok": False, "status": "missing_owner_id"})
-        result = _client(config, args.dry_run).publish_contract(
-            contract_path=args.path,
-            owner_id=owner_id,
-            public=bool(args.public),
-        )
-        return _print(result)
 
     if args.command == "auth":
         if args.auth_command == "set-key":
@@ -240,179 +124,23 @@ def main() -> int:
             )
 
     if args.command == "forge":
-        forge_command = args.forge_command or "start"
-        if forge_command == "start":
-            session = start_forge(intent=args.intent, source_path=args.__dict__.get("from"))
-            session_path = session.save()
-            result: dict[str, object] = {
-                "ok": True,
-                "status": "started",
-                "session_id": session.session_id,
-                "session_path": str(session_path),
-                "current_step": session.current_step(),
-                "is_complete": session.is_complete(),
+        session = start_forge(intent=args.intent, source_path=args.__dict__.get("from"))
+        result: dict[str, object] = {
+            "ok": True,
+            "status": "candidate_ready",
+            "candidate": {
                 "crystallized_intent": session.crystallized_intent,
                 "contract_shape": session.contract_shape,
-                "next_step": "review_contract_shape",
-            }
-            if args.output:
-                generated = session.generate_package(args.output)
-                result["package"] = generated
-                result["next_step"] = "review_generated_package"
-            else:
-                result["package_preview"] = session.package_preview
-            return _print(result)
-        if forge_command == "resume":
-            session = load_forge_session(args.session_id)
-            step = session.current_step()
-            if session.is_complete():
-                return _print(
-                    {
-                        "ok": True,
-                        "status": "complete",
-                        "session_id": session.session_id,
-                        "answers": session.answers,
-                        "contract_shape": session.contract_shape,
-                        "next_step": "generate_package",
-                    }
-                )
-            return _print(_format_step_payload(session.session_id, step, session.answers))
-        if forge_command == "next":
-            session = load_forge_session(args.session_id)
-            step = session.current_step()
-            if session.is_complete():
-                return _print(
-                    {
-                        "ok": True,
-                        "status": "complete",
-                        "session_id": session.session_id,
-                        "answers": session.answers,
-                        "contract_shape": session.contract_shape,
-                        "next_step": "generate_package",
-                    }
-                )
-            return _print(_format_step_payload(session.session_id, step, session.answers))
-        if forge_command == "summary":
-            session = load_forge_session(args.session_id)
-            summary = session.summary()
-            summary.update(
-                {
-                    "ok": True,
-                    "status": "complete" if session.is_complete() else "in_progress",
-                    "usage_hint": {
-                        "next": f"mova forge next {session.session_id}",
-                        "commit": f"mova forge commit {session.session_id} <choice> --reason \"...\"",
-                        "generate": f"mova forge generate {session.session_id} --output ./my-contract",
-                    },
-                }
-            )
-            return _print(summary)
-        if forge_command == "review":
-            session = load_forge_session(args.session_id)
-            result = session.review(confirm=args.confirm)
-            if result.get("ok"):
-                session_path = session.save()
-                result["session_id"] = session.session_id
-                result["session_path"] = str(session_path)
-                result["usage_hint"] = {
-                    "summary": f"mova forge summary {session.session_id}",
-                    "confirm": f"mova forge review {session.session_id} --confirm",
-                    "generate": f"mova forge generate {session.session_id} --output ./my-contract",
-                }
-            return _print(result)
-        if forge_command == "back":
-            session = load_forge_session(args.session_id)
-            result = session.back(args.steps)
-            if not result.get("ok"):
-                return _print(
-                    {
-                        "ok": False,
-                        "status": result.get("status"),
-                        "session_id": session.session_id,
-                    }
-                )
-            session_path = session.save()
-            step = session.current_step()
-            payload = _format_step_payload(session.session_id, step, session.answers)
-            payload.update(
-                {
-                    "session_path": str(session_path),
-                    "rewind_status": "applied",
-                }
-            )
-            return _print(payload)
-        if forge_command == "commit":
-            session = load_forge_session(args.session_id)
-            step = session.current_step()
-            try:
-                resolved_choice = normalize_choice(str(step.get("step_id")), args.choice, list(step.get("options", [])))
-            except ValueError as exc:
-                return _print(
-                    {
-                        "ok": False,
-                        "status": "invalid_choice",
-                        "error": str(exc),
-                        "step": step,
-                    }
-                )
-            result = session.commit(resolved_choice, args.reason)
-            session_path = session.save()
-            if session.is_complete():
-                result.update(
-                    {
-                        "session_id": session.session_id,
-                        "session_path": str(session_path),
-                        "is_complete": True,
-                        "answers": session.answers,
-                        "contract_shape": session.contract_shape,
-                        "next_step": "generate_package",
-                    }
-                )
-            else:
-                result = _format_step_payload(session.session_id, session.current_step(), session.answers)
-                result.update(
-                    {
-                        "session_path": str(session_path),
-                        "commit_status": "applied",
-                    }
-                )
-            return _print(result)
-        if forge_command == "generate":
-            session = load_forge_session(args.session_id)
-            if not session.is_complete() and not args.force:
-                return _print(
-                    {
-                        "ok": False,
-                        "status": "session_not_complete",
-                        "session_id": session.session_id,
-                        "current_step": session.current_step(),
-                        "hint": "Use --force only if you intentionally want to generate from an incomplete session.",
-                    }
-                )
-            if session.is_complete() and not session.review_confirmed and not args.force:
-                return _print(
-                    {
-                        "ok": False,
-                        "status": "session_not_reviewed",
-                        "session_id": session.session_id,
-                        "hint": f"Run `mova forge review {session.session_id} --confirm` before generation, or use --force intentionally.",
-                    }
-                )
+            },
+            "next_step": "handoff_to_platform",
+        }
+        if args.output:
             generated = session.generate_package(args.output)
-            return _print(
-                {
-                    "ok": True,
-                    "status": "generated",
-                    "session_id": session.session_id,
-                    "from_complete_session": session.is_complete(),
-                    "package": generated,
-                }
-            )
-        if forge_command == "sessions":
-            items = list_forge_sessions()
-            if not args.all:
-                items = [item for item in items if not item.get("is_complete")]
-            return _print({"ok": True, "items": items})
+            result["package"] = generated
+            result["next_step"] = "register_and_test_in_state15"
+        else:
+            result["package_preview"] = session.package_preview
+        return _print(result)
 
     if args.command == "validate":
         return _print(validate_contract_package(args.path))
@@ -446,10 +174,6 @@ def main() -> int:
     if args.command == "decide":
         return _print(_client(config, args.dry_run).decide(args.run_id, args.option, args.reason))
 
-    if args.command == "decisions":
-        if args.decisions_command == "pending":
-            return _print(_client(config, args.dry_run).pending_decisions())
-
     if args.command == "audit":
         result = _client(config, args.dry_run).audit(args.run_id)
         if args.verify:
@@ -462,61 +186,6 @@ def main() -> int:
             Path(args.export).write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
             result["exported_to"] = str(Path(args.export).resolve())
         return _print(result)
-
-    if args.command == "connectors":
-        if args.connectors_command == "list":
-            return _print({"ok": True, "status": "scaffold", "message": "Remote connector catalog is not wired yet."})
-        if args.connectors_command == "registered":
-            return _print({"ok": True, "items": config.connector_registry})
-        if args.connectors_command == "test":
-            connector = next((item for item in config.connector_registry if item.get("id") == args.connector_id), None)
-            return _print({"ok": connector is not None, "item": connector})
-        if args.connectors_command == "add":
-            config.connector_registry.append(
-                {
-                    "id": args.id,
-                    "url": args.url,
-                    "auth": args.auth,
-                    "token": args.token or "",
-                }
-            )
-            save_config(config)
-            return _print({"ok": True, "status": "saved", "connector_id": args.id})
-        if args.connectors_command == "remove":
-            before = len(config.connector_registry)
-            config.connector_registry = [
-                item for item in config.connector_registry if item.get("id") != args.connector_id
-            ]
-            save_config(config)
-            return _print(
-                {
-                    "ok": True,
-                    "status": "removed" if len(config.connector_registry) < before else "not_found",
-                    "connector_id": args.connector_id,
-                }
-            )
-
-    if args.command == "contracts":
-        if args.contracts_command == "list":
-            return _print(_client(config, args.dry_run).list_contracts())
-        if args.contracts_command == "pull":
-            return _print(_client(config, args.dry_run).pull_contract(args.contract_id))
-
-    if args.command == "usage":
-        return _print({"ok": True, "status": "scaffold", "from": args.__dict__.get("from"), "to": args.to})
-
-    if args.command == "plan":
-        return _print({"ok": True, "status": "scaffold", "message": "Plan endpoint is not wired yet."})
-
-    if args.command == "cost":
-        return _print({"ok": True, "status": "scaffold", "run_id": args.run_id})
-
-    if args.command == "runs":
-        if args.runs_command == "list":
-            return _print(_client(config, args.dry_run).list_runs())
-
-    if args.command == "serve":
-        return _print({"ok": True, "status": "scaffold", "mode": args.mode, "message": "MCP/native tool mode is the next major slice."})
 
     parser.print_help()
     return 1
