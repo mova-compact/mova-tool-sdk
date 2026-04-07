@@ -50,6 +50,11 @@ Current limitation:
 - `mova validate`
 - `mova inspect`
 - `mova execute`
+- `mova handoff`
+- `mova draft`
+- `mova lab`
+- `mova lab-status`
+- `mova promote`
 - `mova status`
 - `mova decide`
 - `mova audit`
@@ -127,3 +132,11 @@ Current expected flow:
 2. receive candidate package locally
 3. hand off candidate into platform flow via `sdk_local_candidate_handoff_v1.json`
 4. platform performs authoring draft / lab / promotion
+
+Minimal platform continuation commands now map to existing routes:
+
+- `mova handoff` -> `POST /v0/authoring/sessions`
+- `mova draft` -> `POST /v0/authoring/sessions/:session_id/emit-draft`
+- `mova lab` -> `POST /v0/lab/runs`
+- `mova lab-status` -> `GET /v0/lab/runs/:lab_run_id`
+- `mova promote` -> `POST /v0/lab/promote`

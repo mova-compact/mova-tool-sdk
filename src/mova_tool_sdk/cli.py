@@ -77,6 +77,29 @@ def build_parser() -> argparse.ArgumentParser:
     audit.add_argument("--export")
     audit.add_argument("--verify", action="store_true")
 
+    handoff = sub.add_parser("handoff")
+    handoff.add_argument("--form-ref", required=True)
+    handoff.add_argument("--intent", required=True)
+    handoff.add_argument("--mode", choices=["guided", "direct"], default="guided")
+
+    draft = sub.add_parser("draft")
+    draft.add_argument("session_id")
+
+    lab = sub.add_parser("lab")
+    lab.add_argument("--draft-ref", required=True)
+    lab.add_argument("--fixture-set-ref", required=True)
+    lab.add_argument("--mode", choices=["deterministic", "bounded_variance", "ai_assisted", "human_gated"], default="ai_assisted")
+    lab.add_argument("--model-ref", default="sdk.local")
+
+    lab_status = sub.add_parser("lab-status")
+    lab_status.add_argument("lab_run_id")
+
+    promote = sub.add_parser("promote")
+    promote.add_argument("--draft-ref", required=True)
+    promote.add_argument("--evidence-ref", required=True)
+    promote.add_argument("--publisher-ref", required=True)
+    promote.add_argument("--visibility", choices=["private", "public"], default="private")
+
     return parser
 
 
@@ -161,6 +184,43 @@ def main() -> int:
             "tenant_id": args.tenant_id,
         }
         return _print(_client(config, args.dry_run).execute(**payload))
+
+    if args.command == "handoff":
+        return _print(
+            _client(config, args.dry_run).create_authoring_session(
+                form_ref=args.form_ref,
+                raw_minimum_intent=args.intent,
+                mode=args.mode,
+            )
+        )
+
+    if args.command == "draft":
+        return _print(_client(config, args.dry_run).emit_authoring_draft(args.session_id))
+
+    if args.command == "lab":
+        return _print(
+            _client(config, args.dry_run).create_lab_run(
+                draft_contract_ref=args.draft_ref,
+                fixture_set_ref=args.fixture_set_ref,
+                execution_profile={
+                    "mode": args.mode,
+                    "model_ref": args.model_ref,
+                },
+            )
+        )
+
+    if args.command == "lab-status":
+        return _print(_client(config, args.dry_run).get_lab_run(args.lab_run_id))
+
+    if args.command == "promote":
+        return _print(
+            _client(config, args.dry_run).promote_lab_draft(
+                draft_contract_ref=args.draft_ref,
+                evidence_ref=args.evidence_ref,
+                publisher_ref=args.publisher_ref,
+                visibility=args.visibility,
+            )
+        )
 
     if args.command == "status":
         result = _client(config, args.dry_run).get_run(args.run_id)

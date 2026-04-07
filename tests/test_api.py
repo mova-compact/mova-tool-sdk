@@ -20,3 +20,26 @@ def test_public_api_exposes_forge_stub():
     assert isinstance(session, ForgeSession)
     assert session.contract_shape["contract_id"].startswith("contract.")
     assert session.crystallized_intent["status"] == "candidate_ready"
+
+
+def test_public_api_exposes_authoring_handoff_dry_run():
+    client = Mova(dry_run=True, api_key="demo")
+    result = client.create_authoring_session(
+        form_ref="authoring_form_v0",
+        raw_minimum_intent="triage support tickets",
+    )
+    assert result["ok"] is True
+    assert result["status"] == "dry-run"
+    assert result["prepared_request"]["url"].endswith("/v0/authoring/sessions")
+
+
+def test_public_api_exposes_lab_run_dry_run():
+    client = Mova(dry_run=True, api_key="demo")
+    result = client.create_lab_run(
+        draft_contract_ref="artifact://draft.contract.v1",
+        fixture_set_ref="fixture_set.ticket.v1",
+        execution_profile={"mode": "ai_assisted", "model_ref": "sdk.local"},
+    )
+    assert result["ok"] is True
+    assert result["status"] == "dry-run"
+    assert result["prepared_request"]["url"].endswith("/v0/lab/runs")

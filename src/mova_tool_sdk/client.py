@@ -108,6 +108,79 @@ class MovaClient:
     def get_run(self, run_id: str) -> dict[str, object]:
         return self.get_status(run_id)
 
+    def list_authoring_forms(self) -> dict[str, object]:
+        return self._request("GET", "/v0/authoring/forms", scope="admin_read")
+
+    def get_authoring_form(self, form_id: str) -> dict[str, object]:
+        return self._request("GET", f"/v0/authoring/forms/{form_id}", scope="admin_read")
+
+    def create_authoring_session(
+        self,
+        *,
+        form_ref: str,
+        raw_minimum_intent: str,
+        mode: str = "guided",
+    ) -> dict[str, object]:
+        payload = {
+            "mode": mode,
+            "form_ref": form_ref,
+            "raw_minimum_intent": raw_minimum_intent,
+        }
+        return self._request("POST", "/v0/authoring/sessions", payload, scope="runtime_execute")
+
+    def get_authoring_session(self, session_id: str) -> dict[str, object]:
+        return self._request("GET", f"/v0/authoring/sessions/{session_id}", scope="admin_read")
+
+    def answer_authoring_session(self, session_id: str, field_id: str, value: object) -> dict[str, object]:
+        payload = {"field_id": field_id, "value": value}
+        return self._request(
+            "POST",
+            f"/v0/authoring/sessions/{session_id}/answer",
+            payload,
+            scope="runtime_execute",
+        )
+
+    def emit_authoring_draft(self, session_id: str) -> dict[str, object]:
+        return self._request(
+            "POST",
+            f"/v0/authoring/sessions/{session_id}/emit-draft",
+            {},
+            scope="runtime_execute",
+        )
+
+    def create_lab_run(
+        self,
+        *,
+        draft_contract_ref: str,
+        fixture_set_ref: str,
+        execution_profile: dict[str, object],
+    ) -> dict[str, object]:
+        payload = {
+            "draft_contract_ref": draft_contract_ref,
+            "fixture_set_ref": fixture_set_ref,
+            "execution_profile": execution_profile,
+        }
+        return self._request("POST", "/v0/lab/runs", payload, scope="runtime_execute")
+
+    def get_lab_run(self, lab_run_id: str) -> dict[str, object]:
+        return self._request("GET", f"/v0/lab/runs/{lab_run_id}", scope="admin_read")
+
+    def promote_lab_draft(
+        self,
+        *,
+        draft_contract_ref: str,
+        evidence_ref: str,
+        publisher_ref: str,
+        visibility: str,
+    ) -> dict[str, object]:
+        payload = {
+            "draft_contract_ref": draft_contract_ref,
+            "evidence_ref": evidence_ref,
+            "publisher_ref": publisher_ref,
+            "visibility": visibility,
+        }
+        return self._request("POST", "/v0/lab/promote", payload, scope="runtime_execute")
+
     def list_runs(self) -> dict[str, object]:
         return {
             "ok": True,
