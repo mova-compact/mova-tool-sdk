@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -11,6 +11,17 @@ from .contracts import package_root
 
 
 TEMPLATE_ROOT = Path("D:/Projects_MOVA/_mova_meta/templates/contract_package_v0")
+STEP_DEFINITIONS = [
+    ("problem_framing", "Determine what kind of business problem is being converted into a contract."),
+    ("outcome", "State the exact business result the contract must produce."),
+    ("reality", "Clarify what data and operating reality the contract can rely on."),
+    ("strategy", "Choose how the contract should solve the task."),
+    ("verification", "Define how success and failure are verified."),
+    ("constraints", "Make non-negotiable boundaries explicit."),
+    ("decision_rights", "Separate human decisions from system autonomy."),
+    ("uncertainty", "Declare what remains uncertain or review-first."),
+    ("commitment", "Confirm authorship and responsibility for the generated package."),
+]
 
 
 def _slugify(value: str) -> str:
@@ -67,12 +78,79 @@ def _build_input_model(required_inputs: list[str]) -> dict[str, object]:
     }
 
 
-def _build_verification_model(terminal_outcomes: list[str]) -> dict[str, object]:
+def _build_verification_model(verification_codes: list[str], terminal_outcomes: list[str]) -> dict[str, object]:
+    mapped: list[dict[str, object]] = []
+    for index, code in enumerate(verification_codes):
+        outcome = terminal_outcomes[min(index, len(terminal_outcomes) - 1)]
+        severity = "info" if index == 0 else "warning" if index < len(verification_codes) - 1 else "error"
+        mapped.append({"code": code, "maps_to": outcome, "severity": severity})
     return {
-        "verification_codes": [
-            {"code": "SUCCESS", "maps_to": terminal_outcomes[0], "severity": "info"},
-            {"code": "FAILED", "maps_to": terminal_outcomes[-1], "severity": "error"},
-        ]
+        "verification_codes": mapped
+    }
+
+
+def _classify_intent(intent: str) -> dict[str, object]:
+    text = intent.lower()
+    contract_class = "custom"
+    required_inputs = ["subject_id"]
+    optional_inputs: list[str] = []
+    service_bindings = ["connector.user.required"]
+    source_execution_mode = "ai_assisted"
+    engine15_execution_mode = "DRAFT_REVIEW"
+    terminal_outcomes = ["COMPLETED", "FAILED"]
+    verification_codes = ["SUCCESS", "FAILED"]
+
+    if "invoice" in text or "iban" in text or "vendor" in text:
+        contract_class = "finance"
+        required_inputs = ["file_url"]
+        optional_inputs = ["vendor_reference", "currency"]
+        service_bindings = ["connector.document.ocr", "connector.finance.readonly"]
+        if "approval" in text or "approve" in text:
+            service_bindings.append("connector.human.review")
+        terminal_outcomes = ["APPROVED", "REJECTED", "NEEDS_REVIEW"]
+        verification_codes = ["INVOICE_EXTRACTED", "IBAN_VERIFIED", "REVIEW_REQUIRED"]
+    elif "ticket" in text or "helpdesk" in text or "support" in text:
+        contract_class = "ticket"
+        required_inputs = ["title", "summary"]
+        optional_inputs = ["customer_id", "priority"]
+        service_bindings = ["connector.helpdesk.api"]
+        terminal_outcomes = ["TRIAGED", "ESCALATED", "REJECTED"]
+        verification_codes = ["ROUTE_MATCH", "ESCALATION_REQUIRED", "INSUFFICIENT_DATA"]
+    elif "crm" in text or "lead" in text or "sales" in text:
+        contract_class = "crm"
+        required_inputs = ["subject_id"]
+        optional_inputs = ["crm_record_id", "owner_email"]
+        service_bindings = ["connector.crm.api"]
+        terminal_outcomes = ["UPDATED", "QUEUED", "FAILED"]
+        verification_codes = ["CRM_UPDATED", "SYNC_DEFERRED", "SYNC_FAILED"]
+    elif "logistics" in text or "shipment" in text or "delivery" in text:
+        contract_class = "logistics"
+        required_inputs = ["shipment_id"]
+        optional_inputs = ["tracking_number"]
+        service_bindings = ["connector.logistics.api"]
+        terminal_outcomes = ["ROUTED", "HELD", "FAILED"]
+        verification_codes = ["ROUTE_VALID", "HOLD_REQUIRED", "ROUTE_FAILED"]
+
+    if "approval" in text or "approve" in text or "human" in text:
+        source_execution_mode = "human_gated"
+        engine15_execution_mode = "DRAFT_REVIEW"
+        if "connector.human.review" not in service_bindings:
+            service_bindings.append("connector.human.review")
+    elif "read only" in text or "read-only" in text:
+        engine15_execution_mode = "LIVE_READ_ONLY"
+    elif "deterministic" in text:
+        source_execution_mode = "deterministic"
+        engine15_execution_mode = "SAFE_INTERNAL"
+
+    return {
+        "contract_class": contract_class,
+        "required_inputs": required_inputs,
+        "optional_inputs": optional_inputs,
+        "service_bindings": service_bindings,
+        "source_execution_mode": source_execution_mode,
+        "engine15_execution_mode": engine15_execution_mode,
+        "terminal_outcomes": terminal_outcomes,
+        "verification_codes": verification_codes,
     }
 
 
@@ -83,17 +161,40 @@ class ForgeSession:
     crystallized_intent: dict[str, object]
     contract_shape: dict[str, object]
     package_preview: dict[str, object]
+    steps: list[dict[str, object]]
+    cursor: int
+    answers: dict[str, dict[str, str]] = field(default_factory=dict)
 
     def current_step(self) -> dict[str, object]:
+        step = self.steps[self.cursor] if self.cursor < len(self.steps) else None
+        if step is None:
+            return {
+                "status": "ready_for_generation",
+                "observation": "All Forge calibration steps have been satisfied for this first-pass session.",
+                "recommendation": "Review the contract shape, then generate the package for manual hardening.",
+                "contract_shape": self.contract_shape,
+            }
         return {
-            "status": "ready_for_generation",
-            "observation": "Intent was converted into a first-pass contract shape.",
-            "recommendation": "Review the generated shape, then write the package to disk for manual refinement.",
+            "status": "in_progress",
+            "step_id": step["step_id"],
+            "index": self.cursor + 1,
+            "total_steps": len(self.steps),
+            "observation": step["observation"],
+            "recommendation": step["recommendation"],
+            "known_answers": self.answers,
             "contract_shape": self.contract_shape,
         }
 
     def is_complete(self) -> bool:
-        return True
+        return self.cursor >= len(self.steps)
+
+    def commit(self, choice: str, reason: str) -> dict[str, object]:
+        if self.is_complete():
+            return {"ok": False, "status": "already_complete"}
+        step = self.steps[self.cursor]
+        self.answers[step["step_id"]] = {"choice": choice, "reason": reason}
+        self.cursor += 1
+        return {"ok": True, "status": "committed", "next_step": self.current_step()}
 
     def generate_package(self, output_path: str | Path) -> dict[str, object]:
         root = Path(output_path).expanduser().resolve()
@@ -143,13 +244,14 @@ def start_forge(intent: str | None = None, source_path: str | None = None) -> Fo
             seeded_contract = json.loads(source_file.read_text(encoding="utf-8"))
 
     raw_intent = intent or str(seeded_contract.get("summary") or seeded_contract.get("title") or "custom contract")
+    shaping = _classify_intent(raw_intent)
     title = str(seeded_contract.get("title") or _title_from_intent(raw_intent))
     slug = str(seeded_contract.get("contract_id") or f"contract.{_slugify(title)}.v1")
     process_ref = f"pkg_{_slugify(title)}_v1_draft"
     executor_ref = f"runtime_executor.{_slugify(title)}_v1"
-    required_inputs = list(seeded_contract.get("required_inputs") or ["subject_id"])
-    optional_inputs = list(seeded_contract.get("optional_inputs") or [])
-    service_bindings = list(seeded_contract.get("service_bindings") or ["connector.user.required"])
+    required_inputs = list(seeded_contract.get("required_inputs") or shaping["required_inputs"])
+    optional_inputs = list(seeded_contract.get("optional_inputs") or shaping["optional_inputs"])
+    service_bindings = list(seeded_contract.get("service_bindings") or shaping["service_bindings"])
     summary = str(
         seeded_contract.get("summary")
         or f"Contract generated from the business intent: {raw_intent.strip()}."
@@ -171,7 +273,7 @@ def start_forge(intent: str | None = None, source_path: str | None = None) -> Fo
             "system_may": ["prepare a first-pass package draft"],
         },
         "verification": "Package validates structurally and is understandable by the author.",
-        "uncertainty": ["Connector bindings and execution posture may need refinement."],
+        "uncertainty": ["Connector bindings and execution posture may need refinement before production publication."],
         "commitment": "The user owns the contract package and decides whether it remains private or is later published.",
         "status": "crystallization_complete",
     }
@@ -180,15 +282,15 @@ def start_forge(intent: str | None = None, source_path: str | None = None) -> Fo
         "title": title,
         "contract_id": slug,
         "process_contract_ref": process_ref,
-        "contract_class": str(seeded_contract.get("contract_class") or "custom"),
-        "source_execution_mode": str(seeded_contract.get("execution_mode") or "ai_assisted"),
-        "engine15_execution_mode": "DRAFT_REVIEW",
+        "contract_class": str(seeded_contract.get("contract_class") or shaping["contract_class"]),
+        "source_execution_mode": str(seeded_contract.get("execution_mode") or shaping["source_execution_mode"]),
+        "engine15_execution_mode": str(shaping["engine15_execution_mode"]),
         "executor_ref": executor_ref,
         "required_inputs": required_inputs,
         "optional_inputs": optional_inputs,
         "service_bindings": service_bindings,
-        "terminal_outcomes": ["COMPLETED", "FAILED"],
-        "verification_codes": ["SUCCESS", "FAILED"],
+        "terminal_outcomes": list(shaping["terminal_outcomes"]),
+        "verification_codes": list(shaping["verification_codes"]),
     }
 
     source_contract = deepcopy(_load_template_json("source_contract_package_v0.json"))
@@ -223,11 +325,19 @@ def start_forge(intent: str | None = None, source_path: str | None = None) -> Fo
             "process_contract_ref": process_ref,
             "runtime_handler": f"runtime_handler.{_slugify(title)}_v1",
             "executor_ref": executor_ref,
-            "execution_mode": "DRAFT_REVIEW",
+            "execution_mode": contract_shape["engine15_execution_mode"],
             "execution_capable_target": False,
             "input_model_ref": f"packages/contracts/{process_ref}/input_model_v0.json",
             "verification_model_ref": f"packages/contracts/{process_ref}/verification_model_v0.json",
-            "terminal_outcomes": ["COMPLETED", "FAILED"],
+            "capabilities": {
+                "self_contained": False,
+                "external_state": len(service_bindings) > 0,
+                "mutation": False,
+                "human_gated": contract_shape["source_execution_mode"] == "human_gated",
+                "safe_internal_only": contract_shape["engine15_execution_mode"] == "SAFE_INTERNAL",
+                "live_read_only": contract_shape["engine15_execution_mode"] == "LIVE_READ_ONLY",
+            },
+            "terminal_outcomes": contract_shape["terminal_outcomes"],
             "status": "DRAFT",
         }
     )
@@ -238,20 +348,35 @@ def start_forge(intent: str | None = None, source_path: str | None = None) -> Fo
             "calibration_id": f"{process_ref}_policy_calibration_v0",
             "source_contract_id": slug,
             "source_execution_mode": contract_shape["source_execution_mode"],
-            "engine15_execution_mode": "DRAFT_REVIEW",
+            "engine15_execution_mode": contract_shape["engine15_execution_mode"],
             "executor_ref": executor_ref,
-            "mapping": {"SUCCESS": "COMPLETED", "FAILED": "FAILED"},
+            "mapping": {
+                code: contract_shape["terminal_outcomes"][min(index, len(contract_shape["terminal_outcomes"]) - 1)]
+                for index, code in enumerate(contract_shape["verification_codes"])
+            },
             "rationale": [
                 "First-pass Forge package defaults to review-first posture until the author hardens policy and runtime wiring."
             ],
         }
     )
 
+    steps = [
+        {
+            "step_id": step_id,
+            "observation": description,
+            "recommendation": f"Confirm or refine `{step_id}` before final package generation.",
+        }
+        for step_id, description in STEP_DEFINITIONS
+    ]
+
     package_preview = {
         "README.md": _render_readme(title, summary, required_inputs, service_bindings),
         "execution_note.md": _render_execution_note(title, contract_shape["source_execution_mode"], service_bindings),
         "input_model_v0.json": _build_input_model(required_inputs),
-        "verification_model_v0.json": _build_verification_model(["COMPLETED", "FAILED"]),
+        "verification_model_v0.json": _build_verification_model(
+            contract_shape["verification_codes"],
+            contract_shape["terminal_outcomes"],
+        ),
         "policy_calibration_v0.json": policy_calibration,
         "runtime_manifest_v0.json": runtime_manifest,
         "source_contract_package_v0.json": source_contract,
@@ -260,6 +385,8 @@ def start_forge(intent: str | None = None, source_path: str | None = None) -> Fo
     return ForgeSession(
         intent=raw_intent,
         source_path=source_path,
+        steps=steps,
+        cursor=0,
         crystallized_intent=crystallized_intent,
         contract_shape=contract_shape,
         package_preview=package_preview,

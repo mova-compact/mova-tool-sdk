@@ -9,6 +9,25 @@ def test_start_forge_builds_contract_shape():
     assert session.contract_shape["contract_id"].startswith("contract.")
     assert session.contract_shape["engine15_execution_mode"] == "DRAFT_REVIEW"
     assert session.crystallized_intent["status"] == "crystallization_complete"
+    assert session.current_step()["step_id"] == "problem_framing"
+    assert session.is_complete() is False
+
+
+def test_start_forge_shapes_finance_intent():
+    session = start_forge(intent="automate invoice processing with IBAN check and human approval")
+    assert session.contract_shape["contract_class"] == "finance"
+    assert "file_url" in session.contract_shape["required_inputs"]
+    assert "connector.document.ocr" in session.contract_shape["service_bindings"]
+    assert "connector.human.review" in session.contract_shape["service_bindings"]
+    assert session.contract_shape["source_execution_mode"] == "human_gated"
+    assert session.contract_shape["terminal_outcomes"] == ["APPROVED", "REJECTED", "NEEDS_REVIEW"]
+
+
+def test_forge_commit_advances_step():
+    session = start_forge(intent="triage support tickets")
+    result = session.commit("result-definition", "Need a bounded support triage contract")
+    assert result["ok"] is True
+    assert session.current_step()["step_id"] == "outcome"
 
 
 def test_start_forge_generates_package():

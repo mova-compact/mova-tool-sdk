@@ -193,6 +193,8 @@ def main() -> int:
         result: dict[str, object] = {
             "ok": True,
             "status": "started",
+            "current_step": session.current_step(),
+            "is_complete": session.is_complete(),
             "crystallized_intent": session.crystallized_intent,
             "contract_shape": session.contract_shape,
             "next_step": "review_contract_shape",
