@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mova-tool-sdk"
+version = "0.1.0"
+description = "Unified MOVA SDK scaffold: CLI + Python API + future agent tools"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Sergii Miasoiedov" }]
+
+[project.scripts]
+mova = "mova_tool_sdk.cli:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["mova_tool_sdk*"]
