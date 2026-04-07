@@ -1,4 +1,5 @@
 from mova_tool_sdk import Forge, Mova
+from mova_tool_sdk.forge import ForgeSession
 
 
 def test_public_api_exposes_mova_execute_dry_run():
@@ -11,6 +12,6 @@ def test_public_api_exposes_mova_execute_dry_run():
 
 def test_public_api_exposes_forge_stub():
     forge = Forge(api_key="demo")
-    result = forge.start(intent="automate invoice processing")
-    assert result["ok"] is True
-    assert result["status"] == "scaffold"
+    session = forge.start(intent="automate invoice processing")
+    assert isinstance(session, ForgeSession)
+    assert session.contract_shape["contract_id"].startswith("contract.")

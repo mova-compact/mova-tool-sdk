@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .client import MovaClient
 from .config import MovaConfig, load_config, save_config
+from .forge import start_forge
 from .contracts import inspect_contract_package, validate_contract_package
 
 
@@ -53,6 +54,7 @@ def build_parser() -> argparse.ArgumentParser:
     forge = sub.add_parser("forge")
     forge.add_argument("--intent")
     forge.add_argument("--from")
+    forge.add_argument("--output")
 
     validate = sub.add_parser("validate")
     validate.add_argument("path")
@@ -187,15 +189,21 @@ def main() -> int:
             )
 
     if args.command == "forge":
-        return _print(
-            {
-                "ok": True,
-                "status": "scaffold",
-                "message": "Forge flow is the next implementation slice.",
-                "intent": args.intent,
-                "from_path": args.__dict__.get("from"),
-            }
-        )
+        session = start_forge(intent=args.intent, source_path=args.__dict__.get("from"))
+        result: dict[str, object] = {
+            "ok": True,
+            "status": "started",
+            "crystallized_intent": session.crystallized_intent,
+            "contract_shape": session.contract_shape,
+            "next_step": "review_contract_shape",
+        }
+        if args.output:
+            generated = session.generate_package(args.output)
+            result["package"] = generated
+            result["next_step"] = "review_generated_package"
+        else:
+            result["package_preview"] = session.package_preview
+        return _print(result)
 
     if args.command == "validate":
         return _print(validate_contract_package(args.path))

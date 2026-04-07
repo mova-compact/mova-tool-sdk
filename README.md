@@ -98,3 +98,23 @@ session = forge.start(intent="automate invoice processing")
 ```
 
 `Mova` is the canonical public API shape. Internally it still adapts to the current route surface while the platform SDK endpoints are being finalized.
+
+## First Forge slice
+
+`Forge` is no longer a placeholder. The current first slice supports:
+
+- turning an `intent` into a first-pass crystallized contract shape
+- generating a canonical `contract_package_v0` to disk
+- seeding the flow from an existing package directory with `--from`
+
+Example:
+
+```bash
+mova forge --intent "automate invoice processing with human approval" --output ./my-contract
+```
+
+This first slice is intentionally review-first:
+
+- generated packages default to `DRAFT_REVIEW`
+- connector bindings are placeholders until the author hardens them
+- publication and execution remain separate downstream steps
