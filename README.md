@@ -21,6 +21,26 @@ Version `0.1.0` starts with the shared base:
 - local `Forge` candidate generation
 - thin client calls into the current platform surface
 
+## Current runtime boundary
+
+The SDK now follows the real `mcp_door` contour instead of the earlier temporary bridge routes.
+
+Current live client targets are:
+
+- `POST /v0/registry/contracts`
+- `GET /v0/registry/contracts/:contract_id`
+- `POST /intake/runs`
+- `GET /intake/runs/:run_id`
+- `POST /operator/runs/:run_id/approve`
+- `POST /operator/runs/:run_id/deny`
+- `GET /v0/admin/audit/runs/:run_id/export`
+
+Current limitation:
+
+- generic execution by platform `contract_id` is not exposed yet
+- the SDK can honestly execute from a local contract package path because it can derive `process_contract_ref` from `runtime_manifest_v0.json`
+- contract-id-first execution should only be added after `mcp_door` exposes a real runtime resolution route for it
+
 ## Current command groups
 
 - `mova auth set-key`
@@ -75,7 +95,11 @@ The repo now exposes the spec-shaped Python entrypoints:
 from mova_tool_sdk import Forge, Mova
 
 m = Mova()
-result = m.execute(contract_id="finance.invoice_ocr_v1", input_data={"file_url": "https://..."})
+result = m.execute(
+    contract_path="./my-contract",
+    tenant_id="tenant_demo_shop_v0",
+    input_data={"file_url": "https://..."},
+)
 
 forge = Forge()
 session = forge.start(intent="automate invoice processing")

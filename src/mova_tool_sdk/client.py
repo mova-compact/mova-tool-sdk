@@ -7,7 +7,7 @@ import urllib.request
 from dataclasses import dataclass
 
 from .config import DEFAULT_BASE_URL
-from .contracts import build_package_ref, load_package_projection
+from .contracts import load_runtime_manifest, load_source_contract_package
 
 
 @dataclass
@@ -72,18 +72,13 @@ class MovaClient:
         contract_path: str,
         owner_id: str,
         visibility: str = "private",
-        requested_status: str = "private_active",
+        requested_status: str = "validated",
     ) -> dict[str, object]:
-        package_ref = build_package_ref(contract_path)
-        package_projection = load_package_projection(contract_path)
-        payload = {
-            "owner_id": owner_id,
-            "package_ref": package_ref,
-            "requested_visibility": visibility,
-            "requested_status": requested_status,
-            "package_projection": package_projection,
-        }
-        return self._request("POST", "/v1/bridge/contracts/registrations", payload, scope="runtime_execute")
+        payload = load_source_contract_package(contract_path)
+        payload["publisher_ref"] = owner_id
+        payload["visibility"] = visibility
+        payload["status"] = requested_status
+        return self._request("POST", "/v0/registry/contracts", payload, scope="runtime_execute")
 
     def publish_contract(
         self,
@@ -102,13 +97,13 @@ class MovaClient:
         )
 
     def list_contracts(self) -> dict[str, object]:
-        return self._request("GET", "/v1/bridge/contracts", scope="admin_read")
+        return self._request("GET", "/v0/registry/contracts", scope="admin_read")
 
     def pull_contract(self, contract_id: str) -> dict[str, object]:
-        return self._request("GET", f"/v1/bridge/contracts/{contract_id}", scope="admin_read")
+        return self._request("GET", f"/v0/registry/contracts/{contract_id}", scope="admin_read")
 
     def get_status(self, run_id: str) -> dict[str, object]:
-        return self._request("GET", f"/v1/bridge/runs/{run_id}", scope="admin_read")
+        return self._request("GET", f"/intake/runs/{run_id}", scope="admin_read")
 
     def get_run(self, run_id: str) -> dict[str, object]:
         return self.get_status(run_id)
@@ -120,31 +115,24 @@ class MovaClient:
             "message": "Run listing will move to an SDK-native platform endpoint.",
         }
 
-    def run_registered_contract(
+    def create_run(
         self,
-        contract_id: str,
+        *,
+        tenant_id: str,
+        process_contract_ref: str,
         input_data: object,
-        caller_id: str,
-        tenant_id: str | None = None,
-        requested_surface: str = "mova_tool_sdk_v1",
+        requested_surface: str = "mova_tool_sdk",
+        execution_mode: str | None = None,
     ) -> dict[str, object]:
         payload = {
-            "contract_id": contract_id,
-            "caller_id": caller_id,
-            "input_ref": {
-                "kind": "inline_json",
-                "value": json.dumps(input_data),
-            },
+            "tenant_id": tenant_id,
+            "process_contract_ref": process_contract_ref,
             "requested_surface": requested_surface,
+            "intake_payload": input_data if isinstance(input_data, dict) else {"input": input_data},
         }
-        if tenant_id:
-            payload["tenant_id"] = tenant_id
-        return self._request(
-            "POST",
-            f"/v1/bridge/contracts/{contract_id}/runs",
-            payload,
-            scope="runtime_execute",
-        )
+        if execution_mode:
+            payload["execution_mode"] = execution_mode
+        return self._request("POST", "/intake/runs", payload, scope="runtime_execute")
 
     def execute_contract(
         self,
@@ -156,9 +144,11 @@ class MovaClient:
         caller_id: str = "caller.local",
         tenant_id: str | None = None,
     ) -> dict[str, object]:
-        resolved_contract_id = contract_id
+        resolved_process_contract_ref: str | None = None
+        resolved_execution_mode: str | None = None
         registration_result: dict[str, object] | None = None
         if contract_path:
+            runtime_manifest = load_runtime_manifest(contract_path)
             registration_result = self.register_contract_package(
                 contract_path=contract_path,
                 owner_id=owner_id or "owner.local",
@@ -169,21 +159,42 @@ class MovaClient:
                     "status": "registration_failed",
                     "registration": registration_result,
                 }
-            item = registration_result.get("item", {})
-            if isinstance(item, dict):
-                resolved_contract_id = item.get("contract_id") if isinstance(item.get("contract_id"), str) else resolved_contract_id
+            resolved_process_contract_ref = (
+                runtime_manifest.get("process_contract_ref")
+                if isinstance(runtime_manifest.get("process_contract_ref"), str)
+                else None
+            )
+            resolved_execution_mode = (
+                runtime_manifest.get("execution_mode")
+                if isinstance(runtime_manifest.get("execution_mode"), str)
+                else None
+            )
 
-        if not resolved_contract_id:
-            return {"ok": False, "status": "missing_contract_identity"}
+        if contract_id and not contract_path:
+            return {
+                "ok": False,
+                "status": "contract_id_execution_not_supported_yet",
+                "contract_id": contract_id,
+                "hint": "Use a local contract package path until the platform exposes contract_id to runtime resolution.",
+            }
 
-        run_result = self.run_registered_contract(
-            contract_id=resolved_contract_id,
-            input_data=input_data,
-            caller_id=caller_id,
+        if not tenant_id:
+            return {"ok": False, "status": "missing_tenant_id"}
+
+        if not resolved_process_contract_ref:
+            return {"ok": False, "status": "missing_process_contract_ref"}
+
+        run_result = self.create_run(
             tenant_id=tenant_id,
+            process_contract_ref=resolved_process_contract_ref,
+            input_data=input_data,
+            requested_surface="mova_tool_sdk",
+            execution_mode=resolved_execution_mode,
         )
         if registration_result:
             run_result["registration"] = registration_result
+        if caller_id:
+            run_result["caller_id"] = caller_id
         return run_result
 
     def execute(

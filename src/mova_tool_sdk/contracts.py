@@ -90,6 +90,16 @@ def load_package_projection(path: str | Path) -> dict[str, object]:
     }
 
 
+def load_source_contract_package(path: str | Path) -> dict[str, object]:
+    root = package_root(path)
+    return json.loads((root / "source_contract_package_v0.json").read_text(encoding="utf-8"))
+
+
+def load_runtime_manifest(path: str | Path) -> dict[str, object]:
+    root = package_root(path)
+    return json.loads((root / "runtime_manifest_v0.json").read_text(encoding="utf-8"))
+
+
 def build_package_ref(path: str | Path) -> dict[str, str]:
     root = package_root(path)
     source_path = root / "source_contract_package_v0.json"
