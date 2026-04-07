@@ -90,6 +90,26 @@ def test_public_api_exposes_lab_evidence_routes_dry_run():
     assert archived["prepared_request"]["url"].endswith("/v0/lab/evidence/evidence_demo/archive")
 
 
+def test_public_api_exposes_contract_registry_lifecycle_routes_dry_run():
+    client = Mova(dry_run=True, api_key="demo")
+    listed = client.list_contracts()
+    item = client.pull_contract("pkg_demo_contract")
+    history = client.get_contract_history("pkg_demo_contract")
+    lineage = client.get_contract_lineage("pkg_demo_contract")
+    published = client.publish_registered_contract("pkg_demo_contract")
+    deprecated = client.deprecate_contract("pkg_demo_contract")
+    retired = client.retire_contract("pkg_demo_contract")
+    reactivated = client.reactivate_contract("pkg_demo_contract")
+    assert listed["prepared_request"]["url"].endswith("/v0/registry/contracts")
+    assert item["prepared_request"]["url"].endswith("/v0/registry/contracts/pkg_demo_contract")
+    assert history["prepared_request"]["url"].endswith("/v0/registry/contracts/pkg_demo_contract/history")
+    assert lineage["prepared_request"]["url"].endswith("/v0/registry/contracts/pkg_demo_contract/lineage")
+    assert published["prepared_request"]["url"].endswith("/v0/registry/contracts/pkg_demo_contract/publish")
+    assert deprecated["prepared_request"]["url"].endswith("/v0/registry/contracts/pkg_demo_contract/deprecate")
+    assert retired["prepared_request"]["url"].endswith("/v0/registry/contracts/pkg_demo_contract/retire")
+    assert reactivated["prepared_request"]["url"].endswith("/v0/registry/contracts/pkg_demo_contract/reactivate")
+
+
 def test_admin_read_dry_run_can_prepare_gateway_headers(monkeypatch):
     monkeypatch.setenv("MCP_DOOR_GATEWAY_KEY_ID", "gw_test")
     monkeypatch.setenv("MCP_DOOR_GATEWAY_SHARED_SECRET", "secret_test")

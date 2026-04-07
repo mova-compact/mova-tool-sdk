@@ -163,6 +163,24 @@ class MovaClient:
     def pull_contract(self, contract_id: str) -> dict[str, object]:
         return self._request("GET", f"/v0/registry/contracts/{contract_id}", scope="admin_read")
 
+    def get_contract_history(self, contract_id: str) -> dict[str, object]:
+        return self._request("GET", f"/v0/registry/contracts/{contract_id}/history", scope="admin_read")
+
+    def get_contract_lineage(self, contract_id: str) -> dict[str, object]:
+        return self._request("GET", f"/v0/registry/contracts/{contract_id}/lineage", scope="admin_read")
+
+    def publish_registered_contract(self, contract_id: str) -> dict[str, object]:
+        return self._request("POST", f"/v0/registry/contracts/{contract_id}/publish", {}, scope="runtime_execute")
+
+    def deprecate_contract(self, contract_id: str) -> dict[str, object]:
+        return self._request("POST", f"/v0/registry/contracts/{contract_id}/deprecate", {}, scope="runtime_execute")
+
+    def retire_contract(self, contract_id: str) -> dict[str, object]:
+        return self._request("POST", f"/v0/registry/contracts/{contract_id}/retire", {}, scope="runtime_execute")
+
+    def reactivate_contract(self, contract_id: str) -> dict[str, object]:
+        return self._request("POST", f"/v0/registry/contracts/{contract_id}/reactivate", {}, scope="runtime_execute")
+
     def get_status(self, run_id: str) -> dict[str, object]:
         return self._request("GET", f"/intake/runs/{run_id}", scope="admin_read")
 

@@ -132,6 +132,24 @@ def build_parser() -> argparse.ArgumentParser:
     promote.add_argument("--publisher-ref", required=True)
     promote.add_argument("--visibility", choices=["private", "public"], default="private")
 
+    contracts = sub.add_parser("contracts")
+    contracts_sub = contracts.add_subparsers(dest="contracts_command")
+    contracts_sub.add_parser("list")
+    contracts_get = contracts_sub.add_parser("get")
+    contracts_get.add_argument("contract_id")
+    contracts_history = contracts_sub.add_parser("history")
+    contracts_history.add_argument("contract_id")
+    contracts_lineage = contracts_sub.add_parser("lineage")
+    contracts_lineage.add_argument("contract_id")
+    contracts_publish = contracts_sub.add_parser("publish")
+    contracts_publish.add_argument("contract_id")
+    contracts_deprecate = contracts_sub.add_parser("deprecate")
+    contracts_deprecate.add_argument("contract_id")
+    contracts_retire = contracts_sub.add_parser("retire")
+    contracts_retire.add_argument("contract_id")
+    contracts_reactivate = contracts_sub.add_parser("reactivate")
+    contracts_reactivate.add_argument("contract_id")
+
     return parser
 
 
@@ -305,6 +323,26 @@ def main() -> int:
                 visibility=args.visibility,
             )
         )
+
+    if args.command == "contracts":
+        client = _client(config, args.dry_run)
+        if args.contracts_command == "list":
+            return _print(client.list_contracts())
+        if args.contracts_command == "get":
+            return _print(client.pull_contract(args.contract_id))
+        if args.contracts_command == "history":
+            return _print(client.get_contract_history(args.contract_id))
+        if args.contracts_command == "lineage":
+            return _print(client.get_contract_lineage(args.contract_id))
+        if args.contracts_command == "publish":
+            return _print(client.publish_registered_contract(args.contract_id))
+        if args.contracts_command == "deprecate":
+            return _print(client.deprecate_contract(args.contract_id))
+        if args.contracts_command == "retire":
+            return _print(client.retire_contract(args.contract_id))
+        if args.contracts_command == "reactivate":
+            return _print(client.reactivate_contract(args.contract_id))
+        return _print({"ok": False, "status": "missing_contracts_command"})
 
     if args.command == "status":
         result = _client(config, args.dry_run).get_run(args.run_id)
