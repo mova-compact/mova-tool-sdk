@@ -83,6 +83,19 @@ def test_forge_session_save_and_load():
     path.parent.rmdir()
 
 
+def test_loaded_session_backfills_step_options():
+    session = start_forge(intent="triage support tickets")
+    path = session.save(Path("tests") / "_forge_sessions")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    for step in payload["steps"]:
+        step.pop("options", None)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    loaded = load_forge_session(session.session_id, Path("tests") / "_forge_sessions")
+    assert "artifact_creation" in loaded.steps[1]["options"]
+    path.unlink()
+    path.parent.rmdir()
+
+
 def test_start_forge_generates_package():
     output_dir = Path("tests") / "_forge_output"
     if output_dir.exists():

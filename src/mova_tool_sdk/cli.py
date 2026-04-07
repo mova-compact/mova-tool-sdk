@@ -26,6 +26,28 @@ def _print(payload: dict[str, object]) -> int:
     return 0 if payload.get("ok", True) else 1
 
 
+def _format_step_payload(session_id: str, step: dict[str, object], answers: dict[str, object]) -> dict[str, object]:
+    return {
+        "ok": True,
+        "status": step.get("status", "in_progress"),
+        "session_id": session_id,
+        "step": {
+            "id": step.get("step_id"),
+            "index": step.get("index"),
+            "total_steps": step.get("total_steps"),
+            "observation": step.get("observation"),
+            "recommendation": step.get("recommendation"),
+            "options": step.get("options", []),
+        },
+        "known_answers": answers,
+        "contract_shape": step.get("contract_shape"),
+        "usage_hint": {
+            "resume": f"mova forge resume {session_id}",
+            "commit": f"mova forge commit {session_id} <choice> --reason \"...\"",
+        },
+    }
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="mova")
     parser.add_argument("--dry-run", action="store_true")
@@ -62,6 +84,8 @@ def build_parser() -> argparse.ArgumentParser:
     forge_start.add_argument("--output")
     forge_resume = forge_sub.add_parser("resume")
     forge_resume.add_argument("session_id")
+    forge_next = forge_sub.add_parser("next")
+    forge_next.add_argument("session_id")
     forge_commit = forge_sub.add_parser("commit")
     forge_commit.add_argument("session_id")
     forge_commit.add_argument("choice")
@@ -226,29 +250,57 @@ def main() -> int:
             return _print(result)
         if forge_command == "resume":
             session = load_forge_session(args.session_id)
-            return _print(
-                {
-                    "ok": True,
-                    "status": "loaded",
-                    "session_id": session.session_id,
-                    "is_complete": session.is_complete(),
-                    "current_step": session.current_step(),
-                    "answers": session.answers,
-                    "contract_shape": session.contract_shape,
-                }
-            )
+            step = session.current_step()
+            if session.is_complete():
+                return _print(
+                    {
+                        "ok": True,
+                        "status": "complete",
+                        "session_id": session.session_id,
+                        "answers": session.answers,
+                        "contract_shape": session.contract_shape,
+                        "next_step": "generate_package",
+                    }
+                )
+            return _print(_format_step_payload(session.session_id, step, session.answers))
+        if forge_command == "next":
+            session = load_forge_session(args.session_id)
+            step = session.current_step()
+            if session.is_complete():
+                return _print(
+                    {
+                        "ok": True,
+                        "status": "complete",
+                        "session_id": session.session_id,
+                        "answers": session.answers,
+                        "contract_shape": session.contract_shape,
+                        "next_step": "generate_package",
+                    }
+                )
+            return _print(_format_step_payload(session.session_id, step, session.answers))
         if forge_command == "commit":
             session = load_forge_session(args.session_id)
             result = session.commit(args.choice, args.reason)
             session_path = session.save()
-            result.update(
-                {
-                    "session_id": session.session_id,
-                    "session_path": str(session_path),
-                    "is_complete": session.is_complete(),
-                    "answers": session.answers,
-                }
-            )
+            if session.is_complete():
+                result.update(
+                    {
+                        "session_id": session.session_id,
+                        "session_path": str(session_path),
+                        "is_complete": True,
+                        "answers": session.answers,
+                        "contract_shape": session.contract_shape,
+                        "next_step": "generate_package",
+                    }
+                )
+            else:
+                result = _format_step_payload(session.session_id, session.current_step(), session.answers)
+                result.update(
+                    {
+                        "session_path": str(session_path),
+                        "commit_status": "applied",
+                    }
+                )
             return _print(result)
         if forge_command == "sessions":
             items = list_forge_sessions()
