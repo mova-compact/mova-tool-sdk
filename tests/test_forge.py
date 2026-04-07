@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from mova_tool_sdk.forge import start_forge
+from mova_tool_sdk.forge import load_forge_session, start_forge
 
 
 def test_start_forge_builds_contract_shape():
@@ -10,6 +10,7 @@ def test_start_forge_builds_contract_shape():
     assert session.contract_shape["engine15_execution_mode"] == "DRAFT_REVIEW"
     assert session.crystallized_intent["status"] == "crystallization_complete"
     assert session.current_step()["step_id"] == "problem_framing"
+    assert "result-definition" in session.current_step()["options"]
     assert session.is_complete() is False
 
 
@@ -27,7 +28,27 @@ def test_forge_commit_advances_step():
     session = start_forge(intent="triage support tickets")
     result = session.commit("result-definition", "Need a bounded support triage contract")
     assert result["ok"] is True
+    assert session.crystallized_intent["problem_framing"] == "result-definition"
     assert session.current_step()["step_id"] == "outcome"
+
+
+def test_forge_commitment_updates_visibility():
+    session = start_forge(intent="triage support tickets")
+    while session.current_step()["step_id"] != "commitment":
+        session.commit("default-choice", "Progress to commitment step")
+    session.commit("publish_public_later", "I want to commercialize this contract later.")
+    assert session.package_preview["source_contract_package_v0.json"]["visibility"] == "public"
+
+
+def test_forge_session_save_and_load():
+    session = start_forge(intent="triage support tickets")
+    path = session.save(Path("tests") / "_forge_sessions")
+    loaded = load_forge_session(session.session_id, Path("tests") / "_forge_sessions")
+    assert path.exists()
+    assert loaded.session_id == session.session_id
+    assert loaded.current_step()["step_id"] == "problem_framing"
+    path.unlink()
+    path.parent.rmdir()
 
 
 def test_start_forge_generates_package():

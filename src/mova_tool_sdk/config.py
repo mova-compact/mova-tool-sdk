@@ -7,7 +7,16 @@ from pathlib import Path
 
 
 DEFAULT_BASE_URL = "https://api.mova-lab.eu"
-CONFIG_DIR = Path.home() / ".mova"
+
+
+def mova_home() -> Path:
+    override = os.environ.get("MOVA_HOME")
+    if override:
+        return Path(override).expanduser().resolve()
+    return Path.home() / ".mova"
+
+
+CONFIG_DIR = mova_home()
 CONFIG_PATH = CONFIG_DIR / "config.json"
 
 

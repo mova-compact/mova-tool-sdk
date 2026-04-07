@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .client import MovaClient
 from .config import MovaConfig, load_config, save_config
-from .forge import start_forge
+from .forge import load_forge_session, list_forge_sessions, start_forge
 from .contracts import inspect_contract_package, validate_contract_package
 
 
@@ -55,6 +55,19 @@ def build_parser() -> argparse.ArgumentParser:
     forge.add_argument("--intent")
     forge.add_argument("--from")
     forge.add_argument("--output")
+    forge_sub = forge.add_subparsers(dest="forge_command")
+    forge_start = forge_sub.add_parser("start")
+    forge_start.add_argument("--intent")
+    forge_start.add_argument("--from")
+    forge_start.add_argument("--output")
+    forge_resume = forge_sub.add_parser("resume")
+    forge_resume.add_argument("session_id")
+    forge_commit = forge_sub.add_parser("commit")
+    forge_commit.add_argument("session_id")
+    forge_commit.add_argument("choice")
+    forge_commit.add_argument("--reason", required=True)
+    forge_sessions = forge_sub.add_parser("sessions")
+    forge_sessions.add_argument("--all", action="store_true")
 
     validate = sub.add_parser("validate")
     validate.add_argument("path")
@@ -189,23 +202,59 @@ def main() -> int:
             )
 
     if args.command == "forge":
-        session = start_forge(intent=args.intent, source_path=args.__dict__.get("from"))
-        result: dict[str, object] = {
-            "ok": True,
-            "status": "started",
-            "current_step": session.current_step(),
-            "is_complete": session.is_complete(),
-            "crystallized_intent": session.crystallized_intent,
-            "contract_shape": session.contract_shape,
-            "next_step": "review_contract_shape",
-        }
-        if args.output:
-            generated = session.generate_package(args.output)
-            result["package"] = generated
-            result["next_step"] = "review_generated_package"
-        else:
-            result["package_preview"] = session.package_preview
-        return _print(result)
+        forge_command = args.forge_command or "start"
+        if forge_command == "start":
+            session = start_forge(intent=args.intent, source_path=args.__dict__.get("from"))
+            session_path = session.save()
+            result: dict[str, object] = {
+                "ok": True,
+                "status": "started",
+                "session_id": session.session_id,
+                "session_path": str(session_path),
+                "current_step": session.current_step(),
+                "is_complete": session.is_complete(),
+                "crystallized_intent": session.crystallized_intent,
+                "contract_shape": session.contract_shape,
+                "next_step": "review_contract_shape",
+            }
+            if args.output:
+                generated = session.generate_package(args.output)
+                result["package"] = generated
+                result["next_step"] = "review_generated_package"
+            else:
+                result["package_preview"] = session.package_preview
+            return _print(result)
+        if forge_command == "resume":
+            session = load_forge_session(args.session_id)
+            return _print(
+                {
+                    "ok": True,
+                    "status": "loaded",
+                    "session_id": session.session_id,
+                    "is_complete": session.is_complete(),
+                    "current_step": session.current_step(),
+                    "answers": session.answers,
+                    "contract_shape": session.contract_shape,
+                }
+            )
+        if forge_command == "commit":
+            session = load_forge_session(args.session_id)
+            result = session.commit(args.choice, args.reason)
+            session_path = session.save()
+            result.update(
+                {
+                    "session_id": session.session_id,
+                    "session_path": str(session_path),
+                    "is_complete": session.is_complete(),
+                    "answers": session.answers,
+                }
+            )
+            return _print(result)
+        if forge_command == "sessions":
+            items = list_forge_sessions()
+            if not args.all:
+                items = [item for item in items if not item.get("is_complete")]
+            return _print({"ok": True, "items": items})
 
     if args.command == "validate":
         return _print(validate_contract_package(args.path))

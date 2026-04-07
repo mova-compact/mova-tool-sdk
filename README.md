@@ -113,6 +113,15 @@ Example:
 mova forge --intent "automate invoice processing with human approval" --output ./my-contract
 ```
 
+Forge sessions can now be resumed locally:
+
+```bash
+mova forge --intent "automate invoice processing with human approval"
+mova forge sessions
+mova forge resume <session_id>
+mova forge commit <session_id> result-definition --reason "Need a bounded finance review contract"
+```
+
 This first slice is intentionally review-first:
 
 - generated packages default to `DRAFT_REVIEW`

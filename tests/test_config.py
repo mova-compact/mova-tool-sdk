@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from mova_tool_sdk.config import DEFAULT_BASE_URL, load_config
+from mova_tool_sdk.config import DEFAULT_BASE_URL, load_config, mova_home
 
 
 def test_load_config_uses_env_base_url_override(monkeypatch):
@@ -21,3 +21,8 @@ def test_load_config_defaults_without_env(monkeypatch):
     monkeypatch.delenv("MOVA_PLATFORM_URL", raising=False)
     config = load_config(Path("tests") / "_missing_config.json")
     assert config.base_url == DEFAULT_BASE_URL
+
+
+def test_mova_home_uses_env_override(monkeypatch):
+    monkeypatch.setenv("MOVA_HOME", "D:/Projects_MOVA/_mova_meta/tmp/mova_home_test")
+    assert str(mova_home()).endswith("D:\\Projects_MOVA\\_mova_meta\\tmp\\mova_home_test")

@@ -6,11 +6,14 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from uuid import uuid4
 
+from .config import mova_home
 from .contracts import package_root
 
 
 TEMPLATE_ROOT = Path("D:/Projects_MOVA/_mova_meta/templates/contract_package_v0")
+FORGE_SESSION_DIR = mova_home() / "forge_sessions"
 STEP_DEFINITIONS = [
     ("problem_framing", "Determine what kind of business problem is being converted into a contract."),
     ("outcome", "State the exact business result the contract must produce."),
@@ -22,6 +25,63 @@ STEP_DEFINITIONS = [
     ("uncertainty", "Declare what remains uncertain or review-first."),
     ("commitment", "Confirm authorship and responsibility for the generated package."),
 ]
+STEP_OPTIONS = {
+    "problem_framing": [
+        "result-definition",
+        "diagnosis",
+        "planning",
+        "selection-filtering",
+        "coordination",
+    ],
+    "outcome": [
+        "artifact_creation",
+        "state_change",
+        "behavior_change",
+        "decision_preparation",
+    ],
+    "reality": [
+        "goal_only",
+        "goal_plus_current_state",
+        "goal_plus_constraints",
+        "goal_plus_evidence",
+    ],
+    "strategy": [
+        "rigid_plan",
+        "adaptive_feedback",
+        "deficit_first",
+        "outcome_backwards",
+    ],
+    "verification": [
+        "artifact_exists",
+        "behavior_changed",
+        "external_review",
+        "combined_verification",
+    ],
+    "constraints": [
+        "time",
+        "resources",
+        "legal_boundary",
+        "risk_tolerance",
+        "scope_boundary",
+    ],
+    "decision_rights": [
+        "human_decides_criteria_system_executes",
+        "human_approves_final_only",
+        "system_filters_human_selects",
+        "system_local_autonomy_with_guardrails",
+    ],
+    "uncertainty": [
+        "input_incompleteness",
+        "environment_instability",
+        "subjective_evaluation",
+        "resource_unpredictability",
+    ],
+    "commitment": [
+        "keep_private",
+        "register_private_later",
+        "publish_public_later",
+    ],
+}
 
 
 def _slugify(value: str) -> str:
@@ -156,6 +216,7 @@ def _classify_intent(intent: str) -> dict[str, object]:
 
 @dataclass
 class ForgeSession:
+    session_id: str
     intent: str
     source_path: str | None
     crystallized_intent: dict[str, object]
@@ -181,6 +242,7 @@ class ForgeSession:
             "total_steps": len(self.steps),
             "observation": step["observation"],
             "recommendation": step["recommendation"],
+            "options": step.get("options", []),
             "known_answers": self.answers,
             "contract_shape": self.contract_shape,
         }
@@ -193,8 +255,52 @@ class ForgeSession:
             return {"ok": False, "status": "already_complete"}
         step = self.steps[self.cursor]
         self.answers[step["step_id"]] = {"choice": choice, "reason": reason}
+        self._apply_choice(step["step_id"], choice, reason)
         self.cursor += 1
         return {"ok": True, "status": "committed", "next_step": self.current_step()}
+
+    def _apply_choice(self, step_id: str, choice: str, reason: str) -> None:
+        if step_id == "problem_framing":
+            self.crystallized_intent["problem_framing"] = choice
+        elif step_id == "outcome":
+            self.crystallized_intent["outcome"] = choice
+        elif step_id == "reality":
+            self.crystallized_intent["inputs_reality"]["selected_mode"] = choice
+        elif step_id == "strategy":
+            self.crystallized_intent["strategy"] = choice
+        elif step_id == "verification":
+            self.crystallized_intent["verification"] = choice
+        elif step_id == "constraints":
+            self.crystallized_intent["constraints"] = [choice]
+        elif step_id == "decision_rights":
+            self.crystallized_intent["decision_rights"]["selected_mode"] = choice
+        elif step_id == "uncertainty":
+            self.crystallized_intent["uncertainty"] = [choice]
+        elif step_id == "commitment":
+            self.crystallized_intent["commitment"] = reason
+            if choice == "keep_private":
+                self.package_preview["source_contract_package_v0.json"]["visibility"] = "private"
+            elif choice == "publish_public_later":
+                self.package_preview["source_contract_package_v0.json"]["visibility"] = "public"
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "session_id": self.session_id,
+            "intent": self.intent,
+            "source_path": self.source_path,
+            "crystallized_intent": self.crystallized_intent,
+            "contract_shape": self.contract_shape,
+            "package_preview": self.package_preview,
+            "steps": self.steps,
+            "cursor": self.cursor,
+            "answers": self.answers,
+        }
+
+    def save(self, session_dir: Path = FORGE_SESSION_DIR) -> Path:
+        session_dir.mkdir(parents=True, exist_ok=True)
+        path = session_dir / f"{self.session_id}.json"
+        path.write_text(json.dumps(self.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+        return path
 
     def generate_package(self, output_path: str | Path) -> dict[str, object]:
         root = Path(output_path).expanduser().resolve()
@@ -365,6 +471,7 @@ def start_forge(intent: str | None = None, source_path: str | None = None) -> Fo
             "step_id": step_id,
             "observation": description,
             "recommendation": f"Confirm or refine `{step_id}` before final package generation.",
+            "options": STEP_OPTIONS.get(step_id, []),
         }
         for step_id, description in STEP_DEFINITIONS
     ]
@@ -383,11 +490,54 @@ def start_forge(intent: str | None = None, source_path: str | None = None) -> Fo
     }
 
     return ForgeSession(
+        session_id=f"forge_{uuid4().hex}",
         intent=raw_intent,
         source_path=source_path,
-        steps=steps,
-        cursor=0,
         crystallized_intent=crystallized_intent,
         contract_shape=contract_shape,
         package_preview=package_preview,
+        steps=steps,
+        cursor=0,
     )
+
+
+def load_forge_session(session_id: str, session_dir: Path = FORGE_SESSION_DIR) -> ForgeSession:
+    path = session_dir / f"{session_id}.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    raw_steps = list(payload["steps"])
+    normalized_steps = []
+    for step in raw_steps:
+        step_id = str(step["step_id"])
+        normalized = dict(step)
+        normalized.setdefault("options", STEP_OPTIONS.get(step_id, []))
+        normalized_steps.append(normalized)
+    return ForgeSession(
+        session_id=str(payload["session_id"]),
+        intent=str(payload["intent"]),
+        source_path=payload.get("source_path"),
+        crystallized_intent=dict(payload["crystallized_intent"]),
+        contract_shape=dict(payload["contract_shape"]),
+        package_preview=dict(payload["package_preview"]),
+        steps=normalized_steps,
+        cursor=int(payload["cursor"]),
+        answers=dict(payload.get("answers", {})),
+    )
+
+
+def list_forge_sessions(session_dir: Path = FORGE_SESSION_DIR) -> list[dict[str, object]]:
+    if not session_dir.exists():
+        return []
+    items: list[dict[str, object]] = []
+    for path in sorted(session_dir.glob("forge_*.json")):
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        items.append(
+            {
+                "session_id": payload.get("session_id"),
+                "intent": payload.get("intent"),
+                "cursor": payload.get("cursor"),
+                "total_steps": len(payload.get("steps", [])),
+                "is_complete": int(payload.get("cursor", 0)) >= len(payload.get("steps", [])),
+                "path": str(path),
+            }
+        )
+    return items
