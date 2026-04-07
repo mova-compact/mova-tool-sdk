@@ -348,6 +348,8 @@ class ForgeSession:
     steps: list[dict[str, object]]
     cursor: int
     answers: dict[str, dict[str, str]] = field(default_factory=dict)
+    review_confirmed: bool = False
+    review_confirmed_at: str | None = None
 
     def current_step(self) -> dict[str, object]:
         step = self.steps[self.cursor] if self.cursor < len(self.steps) else None
@@ -412,6 +414,10 @@ class ForgeSession:
                 "remaining_steps": len(remaining_steps),
                 "total_steps": len(self.steps),
             },
+            "review": {
+                "confirmed": self.review_confirmed,
+                "confirmed_at": self.review_confirmed_at,
+            },
             "current_step": None
             if current_step is None
             else {
@@ -441,6 +447,8 @@ class ForgeSession:
         self._apply_choice(step["step_id"], choice, reason)
         self._rebuild_package_preview()
         self.cursor += 1
+        self.review_confirmed = False
+        self.review_confirmed_at = None
         return {"ok": True, "status": "committed", "next_step": self.current_step()}
 
     def back(self, steps: int = 1) -> dict[str, object]:
@@ -464,7 +472,34 @@ class ForgeSession:
         self.steps = replay_session.steps
         self.cursor = replay_session.cursor
         self.answers = replay_session.answers
+        self.review_confirmed = False
+        self.review_confirmed_at = None
         return {"ok": True, "status": "rewound", "current_step": self.current_step()}
+
+    def review(self, confirm: bool = False) -> dict[str, object]:
+        summary = self.summary()
+        summary["readiness"] = {
+            "can_generate": self.is_complete() and self.review_confirmed,
+            "needs_completion": not self.is_complete(),
+            "needs_review_confirmation": self.is_complete() and not self.review_confirmed,
+        }
+        if confirm:
+            if not self.is_complete():
+                return {
+                    "ok": False,
+                    "status": "session_not_complete",
+                    "summary": summary,
+                }
+            self.review_confirmed = True
+            self.review_confirmed_at = datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+            summary["review"] = {
+                "confirmed": self.review_confirmed,
+                "confirmed_at": self.review_confirmed_at,
+            }
+            summary["readiness"]["can_generate"] = True
+            summary["readiness"]["needs_review_confirmation"] = False
+            return {"ok": True, "status": "review_confirmed", "summary": summary}
+        return {"ok": True, "status": "review_ready" if self.is_complete() else "review_in_progress", "summary": summary}
 
     def _apply_choice(self, step_id: str, choice: str, reason: str) -> None:
         if step_id == "problem_framing":
@@ -595,6 +630,8 @@ class ForgeSession:
             "steps": self.steps,
             "cursor": self.cursor,
             "answers": self.answers,
+            "review_confirmed": self.review_confirmed,
+            "review_confirmed_at": self.review_confirmed_at,
         }
 
     def save(self, session_dir: Path = FORGE_SESSION_DIR) -> Path:
@@ -822,6 +859,8 @@ def load_forge_session(session_id: str, session_dir: Path = FORGE_SESSION_DIR) -
         steps=normalized_steps,
         cursor=int(payload["cursor"]),
         answers=dict(payload.get("answers", {})),
+        review_confirmed=bool(payload.get("review_confirmed", False)),
+        review_confirmed_at=payload.get("review_confirmed_at"),
     )
 
 

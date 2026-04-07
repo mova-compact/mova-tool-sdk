@@ -91,6 +91,9 @@ def build_parser() -> argparse.ArgumentParser:
     forge_back = forge_sub.add_parser("back")
     forge_back.add_argument("session_id")
     forge_back.add_argument("--steps", type=int, default=1)
+    forge_review = forge_sub.add_parser("review")
+    forge_review.add_argument("session_id")
+    forge_review.add_argument("--confirm", action="store_true")
     forge_summary = forge_sub.add_parser("summary")
     forge_summary.add_argument("session_id")
     forge_commit = forge_sub.add_parser("commit")
@@ -304,6 +307,19 @@ def main() -> int:
                 }
             )
             return _print(summary)
+        if forge_command == "review":
+            session = load_forge_session(args.session_id)
+            result = session.review(confirm=args.confirm)
+            if result.get("ok"):
+                session_path = session.save()
+                result["session_id"] = session.session_id
+                result["session_path"] = str(session_path)
+                result["usage_hint"] = {
+                    "summary": f"mova forge summary {session.session_id}",
+                    "confirm": f"mova forge review {session.session_id} --confirm",
+                    "generate": f"mova forge generate {session.session_id} --output ./my-contract",
+                }
+            return _print(result)
         if forge_command == "back":
             session = load_forge_session(args.session_id)
             result = session.back(args.steps)
@@ -371,6 +387,15 @@ def main() -> int:
                         "session_id": session.session_id,
                         "current_step": session.current_step(),
                         "hint": "Use --force only if you intentionally want to generate from an incomplete session.",
+                    }
+                )
+            if session.is_complete() and not session.review_confirmed and not args.force:
+                return _print(
+                    {
+                        "ok": False,
+                        "status": "session_not_reviewed",
+                        "session_id": session.session_id,
+                        "hint": f"Run `mova forge review {session.session_id} --confirm` before generation, or use --force intentionally.",
                     }
                 )
             generated = session.generate_package(args.output)

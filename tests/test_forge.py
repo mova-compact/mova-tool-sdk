@@ -92,6 +92,7 @@ def test_forge_summary_reports_progress_and_snapshot():
     assert summary["current_step"]["step_id"] == "outcome"
     assert summary["contract_snapshot"]["contract_id"] == session.contract_shape["contract_id"]
     assert summary["decisions"][0]["choice_label"] == "Result definition"
+    assert summary["review"]["confirmed"] is False
 
 
 def test_forge_summary_on_complete_session_has_no_current_step():
@@ -123,6 +124,25 @@ def test_forge_back_at_start_returns_error():
     result = session.back()
     assert result["ok"] is False
     assert result["status"] == "at_start"
+
+
+def test_forge_review_requires_completion_before_confirm():
+    session = start_forge(intent="triage support tickets")
+    result = session.review(confirm=True)
+    assert result["ok"] is False
+    assert result["status"] == "session_not_complete"
+
+
+def test_forge_review_confirm_marks_session_ready_for_generation():
+    session = start_forge(intent="triage support tickets")
+    while not session.is_complete():
+        step = session.current_step()
+        session.commit(step["options"][0], "Progress to completion")
+    result = session.review(confirm=True)
+    assert result["ok"] is True
+    assert result["status"] == "review_confirmed"
+    assert session.review_confirmed is True
+    assert result["summary"]["readiness"]["can_generate"] is True
 
 
 def test_loaded_session_backfills_step_options():
