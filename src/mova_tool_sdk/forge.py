@@ -3,162 +3,16 @@ from __future__ import annotations
 import json
 import re
 from copy import deepcopy
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
-from .config import mova_home
 from .contracts import package_root
 
 
 TEMPLATE_ROOT = Path("D:/Projects_MOVA/_mova_meta/templates/contract_package_v0")
-FORGE_SESSION_DIR = mova_home() / "forge_sessions"
-STEP_DEFINITIONS = [
-    ("problem_framing", "Determine what kind of business problem is being converted into a contract."),
-    ("outcome", "State the exact business result the contract must produce."),
-    ("reality", "Clarify what data and operating reality the contract can rely on."),
-    ("strategy", "Choose how the contract should solve the task."),
-    ("verification", "Define how success and failure are verified."),
-    ("constraints", "Make non-negotiable boundaries explicit."),
-    ("decision_rights", "Separate human decisions from system autonomy."),
-    ("uncertainty", "Declare what remains uncertain or review-first."),
-    ("commitment", "Confirm authorship and responsibility for the generated package."),
-]
-STEP_OPTIONS = {
-    "problem_framing": [
-        "result-definition",
-        "diagnosis",
-        "planning",
-        "selection-filtering",
-        "coordination",
-    ],
-    "outcome": [
-        "artifact_creation",
-        "state_change",
-        "behavior_change",
-        "decision_preparation",
-    ],
-    "reality": [
-        "goal_only",
-        "goal_plus_current_state",
-        "goal_plus_constraints",
-        "goal_plus_evidence",
-    ],
-    "strategy": [
-        "rigid_plan",
-        "adaptive_feedback",
-        "deficit_first",
-        "outcome_backwards",
-    ],
-    "verification": [
-        "artifact_exists",
-        "behavior_changed",
-        "external_review",
-        "combined_verification",
-    ],
-    "constraints": [
-        "time",
-        "resources",
-        "legal_boundary",
-        "risk_tolerance",
-        "scope_boundary",
-    ],
-    "decision_rights": [
-        "human_decides_criteria_system_executes",
-        "human_approves_final_only",
-        "system_filters_human_selects",
-        "system_local_autonomy_with_guardrails",
-    ],
-    "uncertainty": [
-        "input_incompleteness",
-        "environment_instability",
-        "subjective_evaluation",
-        "resource_unpredictability",
-    ],
-    "commitment": [
-        "keep_private",
-        "register_private_later",
-        "publish_public_later",
-    ],
-}
-CHOICE_ALIASES = {
-    "problem_framing": {
-        "result": "result-definition",
-        "selection": "selection-filtering",
-    },
-    "outcome": {
-        "artifact": "artifact_creation",
-        "state": "state_change",
-        "behavior": "behavior_change",
-        "decision": "decision_preparation",
-    },
-    "reality": {
-        "goal-state": "goal_plus_current_state",
-        "goal-constraints": "goal_plus_constraints",
-        "goal-evidence": "goal_plus_evidence",
-    },
-    "strategy": {
-        "rigid": "rigid_plan",
-        "adaptive": "adaptive_feedback",
-        "deficit": "deficit_first",
-        "backwards": "outcome_backwards",
-    },
-    "verification": {
-        "artifact": "artifact_exists",
-        "behavior": "behavior_changed",
-        "review": "external_review",
-        "combined": "combined_verification",
-    },
-    "constraints": {
-        "legal": "legal_boundary",
-        "risk": "risk_tolerance",
-        "scope": "scope_boundary",
-    },
-    "decision_rights": {
-        "human-criteria": "human_decides_criteria_system_executes",
-        "human-final": "human_approves_final_only",
-        "system-filters": "system_filters_human_selects",
-        "guardrails": "system_local_autonomy_with_guardrails",
-    },
-    "uncertainty": {
-        "input": "input_incompleteness",
-        "environment": "environment_instability",
-        "subjective": "subjective_evaluation",
-        "resource": "resource_unpredictability",
-    },
-    "commitment": {
-        "private": "keep_private",
-        "register-private": "register_private_later",
-        "public": "publish_public_later",
-    },
-}
-
-
-def _choice_label(choice: str) -> str:
-    return choice.replace("_", " ").replace("-", " ").strip().capitalize()
-
-
-def _aliases_for_choice(step_id: str, choice: str) -> list[str]:
-    aliases = []
-    for alias, target in CHOICE_ALIASES.get(step_id, {}).items():
-        if target == choice:
-            aliases.append(alias)
-    return aliases
-
-
-def build_step_options(step_id: str, options: list[str]) -> list[dict[str, object]]:
-    items: list[dict[str, object]] = []
-    for index, choice in enumerate(options, start=1):
-        items.append(
-            {
-                "index": index,
-                "value": choice,
-                "label": _choice_label(choice),
-                "aliases": _aliases_for_choice(step_id, choice),
-            }
-        )
-    return items
+SDK_VERSION = "0.1.0"
 
 
 def _slugify(value: str) -> str:
@@ -171,8 +25,7 @@ def _title_from_intent(intent: str) -> str:
     cleaned = re.sub(r"\s+", " ", intent).strip()
     if not cleaned:
         return "Custom Contract"
-    title_words = cleaned[:80].split(" ")
-    return " ".join(word.capitalize() if word.islower() else word for word in title_words)
+    return " ".join(word.capitalize() if word.islower() else word for word in cleaned[:80].split(" "))
 
 
 def _load_template_json(name: str) -> dict[str, object]:
@@ -183,50 +36,35 @@ def _render_readme(title: str, summary: str, required_inputs: list[str], service
     return (
         f"# {title}\n\n"
         f"{summary}\n\n"
-        "## When to use\n\n"
-        "- Use this contract when the business task matches the calibrated intent.\n\n"
-        "## Required inputs\n\n"
+        "## Candidate Status\n\n"
+        "- This package is a candidate contract generated locally in Forge.\n"
+        "- It is not frozen for production execution.\n"
+        "- Next step: hand off into MOVA authoring/lab flow.\n\n"
+        "## Required Inputs\n\n"
         + "\n".join(f"- `{name}`" for name in required_inputs)
-        + "\n\n## Required service bindings\n\n"
+        + "\n\n## Service Bindings\n\n"
         + "\n".join(f"- `{name}`" for name in service_bindings)
         + "\n"
     )
 
 
-def _render_execution_note(title: str, mode: str, service_bindings: list[str]) -> str:
-    return (
-        f"# Execution Note — {title}\n\n"
-        f"- Source execution mode: `{mode}`\n"
-        "- This package was generated by the first Forge slice and should be reviewed before publication.\n"
-        "- Automatic execution boundaries and human gates must be refined during contract hardening.\n"
-        "- External dependencies declared for this package:\n"
-        + "\n".join(f"  - `{binding}`" for binding in service_bindings)
-        + "\n"
-    )
-
-
-def _render_execution_note_with_context(
+def _render_execution_note(
     title: str,
     mode: str,
     service_bindings: list[str],
-    constraints: list[str],
-    uncertainty: list[str],
+    unresolved_gaps: list[str],
 ) -> str:
     lines = [
         f"# Execution Note — {title}",
         "",
         f"- Source execution mode: `{mode}`",
-        "- This package was generated by Forge and should be reviewed before publication.",
-        "- Automatic execution boundaries and human gates must be refined during contract hardening.",
+        "- This package is a candidate and should be tested in the MOVA lab before freeze.",
         "- External dependencies declared for this package:",
     ]
     lines.extend(f"  - `{binding}`" for binding in service_bindings)
-    if constraints:
-        lines.append("- Active constraints:")
-        lines.extend(f"  - `{item}`" for item in constraints)
-    if uncertainty:
-        lines.append("- Remaining uncertainty:")
-        lines.extend(f"  - `{item}`" for item in uncertainty)
+    if unresolved_gaps:
+        lines.append("- Unresolved gaps for the next platform step:")
+        lines.extend(f"  - `{item}`" for item in unresolved_gaps)
     lines.append("")
     return "\n".join(lines)
 
@@ -244,12 +82,14 @@ def _build_input_model(required_inputs: list[str]) -> dict[str, object]:
 def _build_verification_model(verification_codes: list[str], terminal_outcomes: list[str]) -> dict[str, object]:
     mapped: list[dict[str, object]] = []
     for index, code in enumerate(verification_codes):
-        outcome = terminal_outcomes[min(index, len(terminal_outcomes) - 1)]
-        severity = "info" if index == 0 else "warning" if index < len(verification_codes) - 1 else "error"
-        mapped.append({"code": code, "maps_to": outcome, "severity": severity})
-    return {
-        "verification_codes": mapped
-    }
+        mapped.append(
+            {
+                "code": code,
+                "maps_to": terminal_outcomes[min(index, len(terminal_outcomes) - 1)],
+                "severity": "info" if index == 0 else "warning",
+            }
+        )
+    return {"verification_codes": mapped}
 
 
 def _classify_intent(intent: str) -> dict[str, object]:
@@ -262,14 +102,16 @@ def _classify_intent(intent: str) -> dict[str, object]:
     engine15_execution_mode = "DRAFT_REVIEW"
     terminal_outcomes = ["COMPLETED", "FAILED"]
     verification_codes = ["SUCCESS", "FAILED"]
+    unresolved_gaps = [
+        "Policy and runtime wiring must be validated in the platform.",
+        "Connector bindings must be checked against real owner context.",
+    ]
 
     if "invoice" in text or "iban" in text or "vendor" in text:
         contract_class = "finance"
         required_inputs = ["file_url"]
         optional_inputs = ["vendor_reference", "currency"]
         service_bindings = ["connector.document.ocr", "connector.finance.readonly"]
-        if "approval" in text or "approve" in text:
-            service_bindings.append("connector.human.review")
         terminal_outcomes = ["APPROVED", "REJECTED", "NEEDS_REVIEW"]
         verification_codes = ["INVOICE_EXTRACTED", "IBAN_VERIFIED", "REVIEW_REQUIRED"]
     elif "ticket" in text or "helpdesk" in text or "support" in text:
@@ -286,24 +128,16 @@ def _classify_intent(intent: str) -> dict[str, object]:
         service_bindings = ["connector.crm.api"]
         terminal_outcomes = ["UPDATED", "QUEUED", "FAILED"]
         verification_codes = ["CRM_UPDATED", "SYNC_DEFERRED", "SYNC_FAILED"]
-    elif "logistics" in text or "shipment" in text or "delivery" in text:
-        contract_class = "logistics"
-        required_inputs = ["shipment_id"]
-        optional_inputs = ["tracking_number"]
-        service_bindings = ["connector.logistics.api"]
-        terminal_outcomes = ["ROUTED", "HELD", "FAILED"]
-        verification_codes = ["ROUTE_VALID", "HOLD_REQUIRED", "ROUTE_FAILED"]
 
     if "approval" in text or "approve" in text or "human" in text:
         source_execution_mode = "human_gated"
-        engine15_execution_mode = "DRAFT_REVIEW"
         if "connector.human.review" not in service_bindings:
             service_bindings.append("connector.human.review")
-    elif "read only" in text or "read-only" in text:
-        engine15_execution_mode = "LIVE_READ_ONLY"
     elif "deterministic" in text:
         source_execution_mode = "deterministic"
         engine15_execution_mode = "SAFE_INTERNAL"
+    elif "read only" in text or "read-only" in text:
+        engine15_execution_mode = "LIVE_READ_ONLY"
 
     return {
         "contract_class": contract_class,
@@ -314,27 +148,8 @@ def _classify_intent(intent: str) -> dict[str, object]:
         "engine15_execution_mode": engine15_execution_mode,
         "terminal_outcomes": terminal_outcomes,
         "verification_codes": verification_codes,
+        "unresolved_gaps": unresolved_gaps,
     }
-
-
-def normalize_choice(step_id: str, raw_choice: str, options: list[str]) -> str:
-    choice = raw_choice.strip()
-    if not choice:
-        raise ValueError("choice is empty")
-    if choice.isdigit():
-        index = int(choice) - 1
-        if 0 <= index < len(options):
-            return options[index]
-    if choice in options:
-        return choice
-    normalized = choice.replace(" ", "_").replace("-", "_")
-    for option in options:
-        if option.replace("-", "_") == normalized:
-            return option
-    alias = CHOICE_ALIASES.get(step_id, {}).get(choice.lower())
-    if alias and alias in options:
-        return alias
-    raise ValueError(f"unknown choice `{raw_choice}` for step `{step_id}`")
 
 
 @dataclass
@@ -345,300 +160,66 @@ class ForgeSession:
     crystallized_intent: dict[str, object]
     contract_shape: dict[str, object]
     package_preview: dict[str, object]
-    steps: list[dict[str, object]]
-    cursor: int
-    answers: dict[str, dict[str, str]] = field(default_factory=dict)
-    review_confirmed: bool = False
-    review_confirmed_at: str | None = None
 
-    def current_step(self) -> dict[str, object]:
-        step = self.steps[self.cursor] if self.cursor < len(self.steps) else None
-        if step is None:
-            return {
-                "status": "ready_for_generation",
-                "observation": "All Forge calibration steps have been satisfied for this first-pass session.",
-                "recommendation": "Review the contract shape, then generate the package for manual hardening.",
-                "contract_shape": self.contract_shape,
-            }
-        return {
-            "status": "in_progress",
-            "step_id": step["step_id"],
-            "index": self.cursor + 1,
-            "total_steps": len(self.steps),
-            "observation": step["observation"],
-            "recommendation": step["recommendation"],
-            "options": step.get("options", []),
-            "option_items": build_step_options(step["step_id"], list(step.get("options", []))),
-            "known_answers": self.answers,
-            "contract_shape": self.contract_shape,
-        }
-
-    def is_complete(self) -> bool:
-        return self.cursor >= len(self.steps)
-
-    def summary(self) -> dict[str, object]:
-        answered_steps: list[dict[str, object]] = []
-        for step in self.steps:
-            answer = self.answers.get(step["step_id"])
-            if not answer:
-                continue
-            choice = str(answer.get("choice", ""))
-            answered_steps.append(
-                {
-                    "step_id": step["step_id"],
-                    "label": step["step_id"].replace("_", " ").capitalize(),
-                    "choice": choice,
-                    "choice_label": _choice_label(choice),
-                    "reason": answer.get("reason", ""),
-                }
-            )
-
-        remaining_steps: list[dict[str, object]] = []
-        for step in self.steps[self.cursor :]:
-            remaining_steps.append(
-                {
-                    "step_id": step["step_id"],
-                    "label": step["step_id"].replace("_", " ").capitalize(),
-                }
-            )
-
+    def candidate_summary(self) -> dict[str, object]:
         source_contract = self.package_preview["source_contract_package_v0.json"]
         runtime_manifest = self.package_preview["runtime_manifest_v0.json"]
-        current_step = None if self.is_complete() else self.current_step()
         return {
             "session_id": self.session_id,
             "intent": self.intent,
-            "is_complete": self.is_complete(),
-            "progress": {
-                "answered_steps": len(answered_steps),
-                "remaining_steps": len(remaining_steps),
-                "total_steps": len(self.steps),
-            },
-            "review": {
-                "confirmed": self.review_confirmed,
-                "confirmed_at": self.review_confirmed_at,
-            },
-            "current_step": None
-            if current_step is None
-            else {
-                "step_id": current_step.get("step_id"),
-                "label": str(current_step.get("step_id", "")).replace("_", " ").capitalize(),
-                "recommendation": current_step.get("recommendation"),
-            },
-            "decisions": answered_steps,
-            "remaining": remaining_steps,
-            "contract_snapshot": {
-                "contract_id": self.contract_shape["contract_id"],
-                "contract_class": self.contract_shape["contract_class"],
-                "source_execution_mode": self.contract_shape["source_execution_mode"],
-                "engine15_execution_mode": self.contract_shape["engine15_execution_mode"],
-                "required_inputs": list(self.contract_shape["required_inputs"]),
-                "service_bindings": list(self.contract_shape["service_bindings"]),
-                "visibility": source_contract.get("visibility"),
-                "runtime_status": runtime_manifest.get("status"),
-            },
+            "contract_id": self.contract_shape["contract_id"],
+            "contract_class": self.contract_shape["contract_class"],
+            "source_execution_mode": self.contract_shape["source_execution_mode"],
+            "engine15_execution_mode": self.contract_shape["engine15_execution_mode"],
+            "required_inputs": list(self.contract_shape["required_inputs"]),
+            "service_bindings": list(self.contract_shape["service_bindings"]),
+            "visibility": source_contract.get("visibility"),
+            "runtime_status": runtime_manifest.get("status"),
+            "unresolved_gaps": list(self.crystallized_intent.get("unresolved_gaps", [])),
         }
 
-    def commit(self, choice: str, reason: str) -> dict[str, object]:
-        if self.is_complete():
-            return {"ok": False, "status": "already_complete"}
-        step = self.steps[self.cursor]
-        self.answers[step["step_id"]] = {"choice": choice, "reason": reason}
-        self._apply_choice(step["step_id"], choice, reason)
-        self._rebuild_package_preview()
-        self.cursor += 1
-        self.review_confirmed = False
-        self.review_confirmed_at = None
-        return {"ok": True, "status": "committed", "next_step": self.current_step()}
-
-    def back(self, steps: int = 1) -> dict[str, object]:
-        if steps < 1:
-            return {"ok": False, "status": "invalid_step_count"}
-        if self.cursor == 0:
-            return {"ok": False, "status": "at_start"}
-
-        target_cursor = max(0, self.cursor - steps)
-        replay_session = start_forge(intent=self.intent, source_path=self.source_path)
-        ordered_answers = list(self.answers.items())[:target_cursor]
-        for step_id, answer in ordered_answers:
-            current = replay_session.current_step()
-            if current.get("step_id") != step_id:
-                return {"ok": False, "status": "replay_mismatch", "expected": current.get("step_id"), "found": step_id}
-            replay_session.commit(str(answer["choice"]), str(answer["reason"]))
-
-        self.crystallized_intent = replay_session.crystallized_intent
-        self.contract_shape = replay_session.contract_shape
-        self.package_preview = replay_session.package_preview
-        self.steps = replay_session.steps
-        self.cursor = replay_session.cursor
-        self.answers = replay_session.answers
-        self.review_confirmed = False
-        self.review_confirmed_at = None
-        return {"ok": True, "status": "rewound", "current_step": self.current_step()}
-
-    def review(self, confirm: bool = False) -> dict[str, object]:
-        summary = self.summary()
-        summary["readiness"] = {
-            "can_generate": self.is_complete() and self.review_confirmed,
-            "needs_completion": not self.is_complete(),
-            "needs_review_confirmation": self.is_complete() and not self.review_confirmed,
-        }
-        if confirm:
-            if not self.is_complete():
-                return {
-                    "ok": False,
-                    "status": "session_not_complete",
-                    "summary": summary,
-                }
-            self.review_confirmed = True
-            self.review_confirmed_at = datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-            summary["review"] = {
-                "confirmed": self.review_confirmed,
-                "confirmed_at": self.review_confirmed_at,
-            }
-            summary["readiness"]["can_generate"] = True
-            summary["readiness"]["needs_review_confirmation"] = False
-            return {"ok": True, "status": "review_confirmed", "summary": summary}
-        return {"ok": True, "status": "review_ready" if self.is_complete() else "review_in_progress", "summary": summary}
-
-    def _apply_choice(self, step_id: str, choice: str, reason: str) -> None:
-        if step_id == "problem_framing":
-            self.crystallized_intent["problem_framing"] = choice
-        elif step_id == "outcome":
-            self.crystallized_intent["outcome"] = choice
-            if choice == "artifact_creation":
-                self.contract_shape["terminal_outcomes"] = ["GENERATED", "FAILED"]
-                self.contract_shape["verification_codes"] = ["ARTIFACT_READY", "ARTIFACT_FAILED"]
-            elif choice == "state_change":
-                self.contract_shape["terminal_outcomes"] = ["APPLIED", "BLOCKED", "FAILED"]
-                self.contract_shape["verification_codes"] = ["STATE_APPLIED", "HOLD_REQUIRED", "STATE_FAILED"]
-            elif choice == "decision_preparation":
-                self.contract_shape["terminal_outcomes"] = ["PREPARED", "NEEDS_REVIEW", "FAILED"]
-                self.contract_shape["verification_codes"] = ["DECISION_READY", "REVIEW_REQUIRED", "PREPARATION_FAILED"]
-        elif step_id == "reality":
-            self.crystallized_intent["inputs_reality"]["selected_mode"] = choice
-            if choice == "goal_plus_evidence":
-                if "evidence_ref" not in self.contract_shape["optional_inputs"]:
-                    self.contract_shape["optional_inputs"].append("evidence_ref")
-            elif choice == "goal_plus_constraints":
-                if "constraint_context" not in self.contract_shape["optional_inputs"]:
-                    self.contract_shape["optional_inputs"].append("constraint_context")
-        elif step_id == "strategy":
-            self.crystallized_intent["strategy"] = choice
-            if choice == "rigid_plan":
-                self.contract_shape["source_execution_mode"] = "deterministic"
-                self.contract_shape["engine15_execution_mode"] = "SAFE_INTERNAL"
-            elif choice == "adaptive_feedback":
-                self.contract_shape["source_execution_mode"] = "ai_assisted"
-                self.contract_shape["engine15_execution_mode"] = "DRAFT_REVIEW"
-            elif choice == "outcome_backwards":
-                if "goal_state" not in self.contract_shape["required_inputs"]:
-                    self.contract_shape["required_inputs"].append("goal_state")
-        elif step_id == "verification":
-            self.crystallized_intent["verification"] = choice
-            if choice == "artifact_exists":
-                self.contract_shape["verification_codes"] = ["ARTIFACT_READY", "ARTIFACT_MISSING"]
-            elif choice == "behavior_changed":
-                self.contract_shape["verification_codes"] = ["BEHAVIOR_CHANGED", "CHANGE_NOT_CONFIRMED"]
-            elif choice == "external_review":
-                self.contract_shape["verification_codes"] = ["REVIEW_ACCEPTED", "REVIEW_REJECTED"]
-            elif choice == "combined_verification":
-                self.contract_shape["verification_codes"] = ["AUTO_CHECK_PASSED", "HUMAN_REVIEW_REQUIRED", "CHECK_FAILED"]
-        elif step_id == "constraints":
-            self.crystallized_intent["constraints"] = [choice]
-            if choice == "legal_boundary":
-                self.contract_shape["engine15_execution_mode"] = "DRAFT_REVIEW"
-            elif choice == "scope_boundary":
-                self.contract_shape["service_bindings"] = self.contract_shape["service_bindings"][:2]
-        elif step_id == "decision_rights":
-            self.crystallized_intent["decision_rights"]["selected_mode"] = choice
-            if choice == "human_approves_final_only":
-                self.contract_shape["source_execution_mode"] = "human_gated"
-                if "connector.human.review" not in self.contract_shape["service_bindings"]:
-                    self.contract_shape["service_bindings"].append("connector.human.review")
-            elif choice == "system_local_autonomy_with_guardrails":
-                self.contract_shape["engine15_execution_mode"] = "LIVE_READ_ONLY"
-        elif step_id == "uncertainty":
-            self.crystallized_intent["uncertainty"] = [choice]
-            if choice == "input_incompleteness" and "input_quality_note" not in self.contract_shape["optional_inputs"]:
-                self.contract_shape["optional_inputs"].append("input_quality_note")
-        elif step_id == "commitment":
-            self.crystallized_intent["commitment"] = reason
-            if choice == "keep_private":
-                self.package_preview["source_contract_package_v0.json"]["visibility"] = "private"
-            elif choice == "publish_public_later":
-                self.package_preview["source_contract_package_v0.json"]["visibility"] = "public"
-
-    def _rebuild_package_preview(self) -> None:
-        title = str(self.contract_shape["title"])
-        summary = str(self.package_preview["source_contract_package_v0.json"]["summary"])
-        required_inputs = list(dict.fromkeys(self.contract_shape["required_inputs"]))
-        optional_inputs = list(dict.fromkeys(self.contract_shape["optional_inputs"]))
-        service_bindings = list(dict.fromkeys(self.contract_shape["service_bindings"]))
-        terminal_outcomes = list(dict.fromkeys(self.contract_shape["terminal_outcomes"]))
-        verification_codes = list(dict.fromkeys(self.contract_shape["verification_codes"]))
-
-        source_contract = self.package_preview["source_contract_package_v0.json"]
-        source_contract["contract_class"] = self.contract_shape["contract_class"]
-        source_contract["execution_mode"] = self.contract_shape["source_execution_mode"]
-        source_contract["required_inputs"] = required_inputs
-        source_contract["optional_inputs"] = optional_inputs
-        source_contract["service_bindings"] = service_bindings
-
-        runtime_manifest = self.package_preview["runtime_manifest_v0.json"]
-        runtime_manifest["execution_mode"] = self.contract_shape["engine15_execution_mode"]
-        runtime_manifest["terminal_outcomes"] = terminal_outcomes
-        runtime_manifest["capabilities"] = {
-            "self_contained": False,
-            "external_state": len(service_bindings) > 0,
-            "mutation": False,
-            "human_gated": self.contract_shape["source_execution_mode"] == "human_gated",
-            "safe_internal_only": self.contract_shape["engine15_execution_mode"] == "SAFE_INTERNAL",
-            "live_read_only": self.contract_shape["engine15_execution_mode"] == "LIVE_READ_ONLY",
-        }
-
-        policy_calibration = self.package_preview["policy_calibration_v0.json"]
-        policy_calibration["source_execution_mode"] = self.contract_shape["source_execution_mode"]
-        policy_calibration["engine15_execution_mode"] = self.contract_shape["engine15_execution_mode"]
-        policy_calibration["mapping"] = {
-            code: terminal_outcomes[min(index, len(terminal_outcomes) - 1)]
-            for index, code in enumerate(verification_codes)
-        }
-
-        self.package_preview["input_model_v0.json"] = _build_input_model(required_inputs)
-        self.package_preview["verification_model_v0.json"] = _build_verification_model(
-            verification_codes,
-            terminal_outcomes,
-        )
-        self.package_preview["README.md"] = _render_readme(title, summary, required_inputs, service_bindings)
-        self.package_preview["execution_note.md"] = _render_execution_note_with_context(
-            title,
-            self.contract_shape["source_execution_mode"],
-            service_bindings,
-            list(self.crystallized_intent.get("constraints", [])),
-            list(self.crystallized_intent.get("uncertainty", [])),
-        )
-
-    def to_dict(self) -> dict[str, object]:
+    def to_local_candidate_handoff(
+        self,
+        *,
+        target: str = "authoring",
+        actor_id: str | None = None,
+        owner_ref: str | None = None,
+        tenant_ref: str | None = None,
+    ) -> dict[str, object]:
+        intent_context = self.crystallized_intent.get("intent_context", {})
         return {
-            "session_id": self.session_id,
-            "intent": self.intent,
-            "source_path": self.source_path,
-            "crystallized_intent": self.crystallized_intent,
-            "contract_shape": self.contract_shape,
-            "package_preview": self.package_preview,
-            "steps": self.steps,
-            "cursor": self.cursor,
-            "answers": self.answers,
-            "review_confirmed": self.review_confirmed,
-            "review_confirmed_at": self.review_confirmed_at,
+            "env_type": "sdk_local_candidate_handoff_v1",
+            "handoff_id": f"handoff_{uuid4().hex}",
+            "created_at": datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+            "source": {
+                "sdk_name": "mova-tool-sdk",
+                "sdk_version": SDK_VERSION,
+                "calibration_mode": "local_manual",
+            },
+            "actor_context": {
+                "actor_id": actor_id or "actor.local",
+                "owner_ref": owner_ref or "org.user.local",
+                "tenant_ref": tenant_ref or "tenant.local",
+            },
+            "intent_context": {
+                "raw_intent_text": self.intent,
+                "goal_description": intent_context.get("goal_description", ""),
+                "verification_criteria": intent_context.get("verification_criteria", []),
+                "invariants": intent_context.get("invariants", []),
+                "unresolved_gaps": self.crystallized_intent.get("unresolved_gaps", []),
+            },
+            "candidate_package": {
+                "source_contract_package_v0": self.package_preview["source_contract_package_v0.json"],
+                "runtime_manifest_v0": self.package_preview["runtime_manifest_v0.json"],
+                "policy_calibration_v0": self.package_preview["policy_calibration_v0.json"],
+                "input_model_v0": self.package_preview["input_model_v0.json"],
+                "verification_model_v0": self.package_preview["verification_model_v0.json"],
+            },
+            "handoff": {
+                "target": target,
+                "intent": "create_candidate_draft" if target == "authoring" else "test_candidate_in_lab",
+            },
         }
-
-    def save(self, session_dir: Path = FORGE_SESSION_DIR) -> Path:
-        session_dir.mkdir(parents=True, exist_ok=True)
-        path = session_dir / f"{self.session_id}.json"
-        path.write_text(json.dumps(self.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
-        return path
 
     def generate_package(self, output_path: str | Path) -> dict[str, object]:
         root = Path(output_path).expanduser().resolve()
@@ -670,12 +251,18 @@ class ForgeSession:
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(contents, encoding="utf-8")
 
+        handoff_payload = self.to_local_candidate_handoff()
+        (root / "sdk_local_candidate_handoff_v1.json").write_text(
+            json.dumps(handoff_payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
         return {
             "ok": True,
             "status": "generated",
             "output_path": str(root),
             "contract_id": self.contract_shape["contract_id"],
-            "files": sorted(files.keys()),
+            "files": sorted([*files.keys(), "sdk_local_candidate_handoff_v1.json"]),
         }
 
 
@@ -691,35 +278,27 @@ def start_forge(intent: str | None = None, source_path: str | None = None) -> Fo
     shaping = _classify_intent(raw_intent)
     title = str(seeded_contract.get("title") or _title_from_intent(raw_intent))
     slug = str(seeded_contract.get("contract_id") or f"contract.{_slugify(title)}.v1")
-    process_ref = f"pkg_{_slugify(title)}_v1_draft"
+    process_ref = f"pkg_{_slugify(title)}_v1_candidate"
     executor_ref = f"runtime_executor.{_slugify(title)}_v1"
     required_inputs = list(seeded_contract.get("required_inputs") or shaping["required_inputs"])
     optional_inputs = list(seeded_contract.get("optional_inputs") or shaping["optional_inputs"])
     service_bindings = list(seeded_contract.get("service_bindings") or shaping["service_bindings"])
-    summary = str(
-        seeded_contract.get("summary")
-        or f"Contract generated from the business intent: {raw_intent.strip()}."
-    )
+    summary = str(seeded_contract.get("summary") or f"Candidate contract generated from the business intent: {raw_intent.strip()}.")
     timestamp = datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
     crystallized_intent = {
-        "intent": raw_intent,
-        "problem_framing": "result_definition",
-        "outcome": "Create a bounded contract package that can later be registered in MOVA.",
-        "inputs_reality": {
-            "facts": [],
-            "assumptions": ["This first Forge slice uses template-driven defaults that require manual review."],
+        "status": "candidate_ready",
+        "raw_intent": raw_intent,
+        "intent_context": {
+            "goal_description": "Turn the calibrated business task into a candidate contract package for platform testing.",
+            "verification_criteria": [
+                "The package validates structurally.",
+                "The package is suitable for authoring/lab handoff.",
+            ],
+            "invariants": ["Use canonical contract_package_v0 structure."],
         },
-        "strategy": "contract_first_authoring",
-        "constraints": ["Use canonical contract_package_v0 structure."],
-        "decision_rights": {
-            "human_controls": ["final contract review", "publication choice", "connector binding"],
-            "system_may": ["prepare a first-pass package draft"],
-        },
-        "verification": "Package validates structurally and is understandable by the author.",
-        "uncertainty": ["Connector bindings and execution posture may need refinement before production publication."],
-        "commitment": "The user owns the contract package and decides whether it remains private or is later published.",
-        "status": "crystallization_complete",
+        "unresolved_gaps": list(shaping["unresolved_gaps"]),
+        "recommendation": "Hand this candidate into MOVA authoring/lab flow for test runs and hardening.",
     }
 
     contract_shape = {
@@ -755,7 +334,7 @@ def start_forge(intent: str | None = None, source_path: str | None = None) -> Fo
             "optional_inputs": optional_inputs,
             "publisher_ref": "org.user.local",
             "visibility": "private",
-            "status": "draft",
+            "status": "candidate",
             "applicability": [raw_intent],
             "not_applicable": ["Unreviewed production execution"],
             "created_at": timestamp,
@@ -782,7 +361,7 @@ def start_forge(intent: str | None = None, source_path: str | None = None) -> Fo
                 "live_read_only": contract_shape["engine15_execution_mode"] == "LIVE_READ_ONLY",
             },
             "terminal_outcomes": contract_shape["terminal_outcomes"],
-            "status": "DRAFT",
+            "status": "CANDIDATE",
         }
     )
 
@@ -799,24 +378,20 @@ def start_forge(intent: str | None = None, source_path: str | None = None) -> Fo
                 for index, code in enumerate(contract_shape["verification_codes"])
             },
             "rationale": [
-                "First-pass Forge package defaults to review-first posture until the author hardens policy and runtime wiring."
+                "This is a local candidate package.",
+                "Freeze and production execution posture must be hardened through the platform lab flow.",
             ],
         }
     )
 
-    steps = [
-        {
-            "step_id": step_id,
-            "observation": description,
-            "recommendation": f"Confirm or refine `{step_id}` before final package generation.",
-            "options": STEP_OPTIONS.get(step_id, []),
-        }
-        for step_id, description in STEP_DEFINITIONS
-    ]
-
     package_preview = {
         "README.md": _render_readme(title, summary, required_inputs, service_bindings),
-        "execution_note.md": _render_execution_note(title, contract_shape["source_execution_mode"], service_bindings),
+        "execution_note.md": _render_execution_note(
+            title,
+            contract_shape["source_execution_mode"],
+            service_bindings,
+            list(shaping["unresolved_gaps"]),
+        ),
         "input_model_v0.json": _build_input_model(required_inputs),
         "verification_model_v0.json": _build_verification_model(
             contract_shape["verification_codes"],
@@ -834,50 +409,4 @@ def start_forge(intent: str | None = None, source_path: str | None = None) -> Fo
         crystallized_intent=crystallized_intent,
         contract_shape=contract_shape,
         package_preview=package_preview,
-        steps=steps,
-        cursor=0,
     )
-
-
-def load_forge_session(session_id: str, session_dir: Path = FORGE_SESSION_DIR) -> ForgeSession:
-    path = session_dir / f"{session_id}.json"
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    raw_steps = list(payload["steps"])
-    normalized_steps = []
-    for step in raw_steps:
-        step_id = str(step["step_id"])
-        normalized = dict(step)
-        normalized.setdefault("options", STEP_OPTIONS.get(step_id, []))
-        normalized_steps.append(normalized)
-    return ForgeSession(
-        session_id=str(payload["session_id"]),
-        intent=str(payload["intent"]),
-        source_path=payload.get("source_path"),
-        crystallized_intent=dict(payload["crystallized_intent"]),
-        contract_shape=dict(payload["contract_shape"]),
-        package_preview=dict(payload["package_preview"]),
-        steps=normalized_steps,
-        cursor=int(payload["cursor"]),
-        answers=dict(payload.get("answers", {})),
-        review_confirmed=bool(payload.get("review_confirmed", False)),
-        review_confirmed_at=payload.get("review_confirmed_at"),
-    )
-
-
-def list_forge_sessions(session_dir: Path = FORGE_SESSION_DIR) -> list[dict[str, object]]:
-    if not session_dir.exists():
-        return []
-    items: list[dict[str, object]] = []
-    for path in sorted(session_dir.glob("forge_*.json")):
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        items.append(
-            {
-                "session_id": payload.get("session_id"),
-                "intent": payload.get("intent"),
-                "cursor": payload.get("cursor"),
-                "total_steps": len(payload.get("steps", [])),
-                "is_complete": int(payload.get("cursor", 0)) >= len(payload.get("steps", [])),
-                "path": str(path),
-            }
-        )
-    return items

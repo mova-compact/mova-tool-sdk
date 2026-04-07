@@ -19,4 +19,4 @@ def test_public_api_exposes_forge_stub():
     session = forge.start(intent="automate invoice processing")
     assert isinstance(session, ForgeSession)
     assert session.contract_shape["contract_id"].startswith("contract.")
-    assert session.current_step()["step_id"] == "problem_framing"
+    assert session.crystallized_intent["status"] == "candidate_ready"

@@ -112,7 +112,7 @@ session = forge.start(intent="automate invoice processing")
 `Forge` stays local and light. Its purpose is:
 
 - turn a business intent into a canonical candidate package
-- let the user review that candidate locally
+- emit a platform-facing `sdk_local_candidate_handoff_v1` envelope
 - hand the candidate off into the real platform contour for authoring draft, lab testing, and promotion
 
 Example:
@@ -125,5 +125,5 @@ Current expected flow:
 
 1. `mova forge ...`
 2. receive candidate package locally
-3. hand off candidate into platform flow
+3. hand off candidate into platform flow via `sdk_local_candidate_handoff_v1.json`
 4. platform performs authoring draft / lab / promotion

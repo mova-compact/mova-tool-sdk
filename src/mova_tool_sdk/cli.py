@@ -128,18 +128,15 @@ def main() -> int:
         result: dict[str, object] = {
             "ok": True,
             "status": "candidate_ready",
-            "candidate": {
-                "crystallized_intent": session.crystallized_intent,
-                "contract_shape": session.contract_shape,
-            },
+            "candidate": session.candidate_summary(),
+            "handoff": session.to_local_candidate_handoff(),
             "next_step": "handoff_to_platform",
         }
         if args.output:
             generated = session.generate_package(args.output)
             result["package"] = generated
-            result["next_step"] = "register_and_test_in_state15"
-        else:
-            result["package_preview"] = session.package_preview
+            result["next_step"] = "authoring_or_lab_in_state15"
+        result["package_preview"] = session.package_preview
         return _print(result)
 
     if args.command == "validate":
