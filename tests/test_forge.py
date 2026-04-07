@@ -104,6 +104,27 @@ def test_forge_summary_on_complete_session_has_no_current_step():
     assert summary["current_step"] is None
 
 
+def test_forge_back_rewinds_last_step_and_rebuilds_shape():
+    session = start_forge(intent="triage support tickets")
+    session.commit("result-definition", "Bound the task first")
+    session.commit("decision_preparation", "Need a prepared decision packet")
+    assert session.current_step()["step_id"] == "reality"
+    result = session.back()
+    assert result["ok"] is True
+    assert session.current_step()["step_id"] == "outcome"
+    assert session.answers == {"problem_framing": {"choice": "result-definition", "reason": "Bound the task first"}}
+    assert session.crystallized_intent["outcome"] != "decision_preparation"
+    codes = session.package_preview["verification_model_v0.json"]["verification_codes"]
+    assert codes[0]["code"] != "DECISION_READY"
+
+
+def test_forge_back_at_start_returns_error():
+    session = start_forge(intent="triage support tickets")
+    result = session.back()
+    assert result["ok"] is False
+    assert result["status"] == "at_start"
+
+
 def test_loaded_session_backfills_step_options():
     session = start_forge(intent="triage support tickets")
     path = session.save(Path("tests") / "_forge_sessions")

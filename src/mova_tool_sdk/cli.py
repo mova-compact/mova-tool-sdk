@@ -88,6 +88,9 @@ def build_parser() -> argparse.ArgumentParser:
     forge_resume.add_argument("session_id")
     forge_next = forge_sub.add_parser("next")
     forge_next.add_argument("session_id")
+    forge_back = forge_sub.add_parser("back")
+    forge_back.add_argument("session_id")
+    forge_back.add_argument("--steps", type=int, default=1)
     forge_summary = forge_sub.add_parser("summary")
     forge_summary.add_argument("session_id")
     forge_commit = forge_sub.add_parser("commit")
@@ -301,6 +304,27 @@ def main() -> int:
                 }
             )
             return _print(summary)
+        if forge_command == "back":
+            session = load_forge_session(args.session_id)
+            result = session.back(args.steps)
+            if not result.get("ok"):
+                return _print(
+                    {
+                        "ok": False,
+                        "status": result.get("status"),
+                        "session_id": session.session_id,
+                    }
+                )
+            session_path = session.save()
+            step = session.current_step()
+            payload = _format_step_payload(session.session_id, step, session.answers)
+            payload.update(
+                {
+                    "session_path": str(session_path),
+                    "rewind_status": "applied",
+                }
+            )
+            return _print(payload)
         if forge_command == "commit":
             session = load_forge_session(args.session_id)
             step = session.current_step()

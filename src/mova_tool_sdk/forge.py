@@ -443,6 +443,29 @@ class ForgeSession:
         self.cursor += 1
         return {"ok": True, "status": "committed", "next_step": self.current_step()}
 
+    def back(self, steps: int = 1) -> dict[str, object]:
+        if steps < 1:
+            return {"ok": False, "status": "invalid_step_count"}
+        if self.cursor == 0:
+            return {"ok": False, "status": "at_start"}
+
+        target_cursor = max(0, self.cursor - steps)
+        replay_session = start_forge(intent=self.intent, source_path=self.source_path)
+        ordered_answers = list(self.answers.items())[:target_cursor]
+        for step_id, answer in ordered_answers:
+            current = replay_session.current_step()
+            if current.get("step_id") != step_id:
+                return {"ok": False, "status": "replay_mismatch", "expected": current.get("step_id"), "found": step_id}
+            replay_session.commit(str(answer["choice"]), str(answer["reason"]))
+
+        self.crystallized_intent = replay_session.crystallized_intent
+        self.contract_shape = replay_session.contract_shape
+        self.package_preview = replay_session.package_preview
+        self.steps = replay_session.steps
+        self.cursor = replay_session.cursor
+        self.answers = replay_session.answers
+        return {"ok": True, "status": "rewound", "current_step": self.current_step()}
+
     def _apply_choice(self, step_id: str, choice: str, reason: str) -> None:
         if step_id == "problem_framing":
             self.crystallized_intent["problem_framing"] = choice
