@@ -128,6 +128,29 @@ class MovaClient:
         }
         return self._request("POST", "/v0/authoring/sessions", payload, scope="runtime_execute")
 
+    def create_authoring_session_from_handoff(
+        self,
+        *,
+        form_ref: str,
+        handoff_payload: dict[str, object],
+        mode: str = "guided",
+    ) -> dict[str, object]:
+        if handoff_payload.get("env_type") != "sdk_local_candidate_handoff_v1":
+            return {"ok": False, "status": "invalid_handoff_env_type"}
+        intent_context = handoff_payload.get("intent_context", {})
+        raw_minimum_intent = ""
+        if isinstance(intent_context, dict):
+            raw_value = intent_context.get("raw_intent_text")
+            if isinstance(raw_value, str):
+                raw_minimum_intent = raw_value
+        if not raw_minimum_intent:
+            return {"ok": False, "status": "missing_raw_intent_text"}
+        return self.create_authoring_session(
+            form_ref=form_ref,
+            raw_minimum_intent=raw_minimum_intent,
+            mode=mode,
+        )
+
     def get_authoring_session(self, session_id: str) -> dict[str, object]:
         return self._request("GET", f"/v0/authoring/sessions/{session_id}", scope="admin_read")
 

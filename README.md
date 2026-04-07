@@ -140,3 +140,8 @@ Minimal platform continuation commands now map to existing routes:
 - `mova lab` -> `POST /v0/lab/runs`
 - `mova lab-status` -> `GET /v0/lab/runs/:lab_run_id`
 - `mova promote` -> `POST /v0/lab/promote`
+
+`mova handoff` can now use either:
+
+- `--intent "..."` for a raw direct handoff
+- `--candidate-file ./sdk_local_candidate_handoff_v1.json` for the canonical SDK-generated handoff envelope

@@ -33,6 +33,19 @@ def test_public_api_exposes_authoring_handoff_dry_run():
     assert result["prepared_request"]["url"].endswith("/v0/authoring/sessions")
 
 
+def test_public_api_exposes_authoring_handoff_from_candidate_envelope():
+    client = Mova(dry_run=True, api_key="demo")
+    forge = Forge(api_key="demo")
+    session = forge.start(intent="triage support tickets")
+    result = client.create_authoring_session_from_handoff(
+        form_ref="authoring_form_v0",
+        handoff_payload=session.to_local_candidate_handoff(),
+    )
+    assert result["ok"] is True
+    assert result["status"] == "dry-run"
+    assert result["prepared_request"]["url"].endswith("/v0/authoring/sessions")
+
+
 def test_public_api_exposes_lab_run_dry_run():
     client = Mova(dry_run=True, api_key="demo")
     result = client.create_lab_run(

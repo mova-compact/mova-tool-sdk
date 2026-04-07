@@ -79,7 +79,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     handoff = sub.add_parser("handoff")
     handoff.add_argument("--form-ref", required=True)
-    handoff.add_argument("--intent", required=True)
+    handoff.add_argument("--intent")
+    handoff.add_argument("--candidate-file")
     handoff.add_argument("--mode", choices=["guided", "direct"], default="guided")
 
     draft = sub.add_parser("draft")
@@ -186,8 +187,20 @@ def main() -> int:
         return _print(_client(config, args.dry_run).execute(**payload))
 
     if args.command == "handoff":
+        if not args.intent and not args.candidate_file:
+            return _print({"ok": False, "status": "missing_handoff_input"})
+        client = _client(config, args.dry_run)
+        if args.candidate_file:
+            handoff_payload = json.loads(Path(args.candidate_file).read_text(encoding="utf-8"))
+            return _print(
+                client.create_authoring_session_from_handoff(
+                    form_ref=args.form_ref,
+                    handoff_payload=handoff_payload,
+                    mode=args.mode,
+                )
+            )
         return _print(
-            _client(config, args.dry_run).create_authoring_session(
+            client.create_authoring_session(
                 form_ref=args.form_ref,
                 raw_minimum_intent=args.intent,
                 mode=args.mode,
