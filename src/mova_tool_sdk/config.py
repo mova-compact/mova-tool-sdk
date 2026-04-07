@@ -29,18 +29,24 @@ def load_config(path: Path = CONFIG_PATH) -> MovaConfig:
     else:
         payload = json.loads(path.read_text(encoding="utf-8"))
         config = MovaConfig(
-        api_key=payload.get("api_key"),
-        base_url=payload.get("base_url", DEFAULT_BASE_URL),
-        profile_id=payload.get("profile_id"),
-        default_owner_id=payload.get("default_owner_id"),
-        admin_read_token=payload.get("admin_read_token"),
-        runtime_execute_token=payload.get("runtime_execute_token"),
-        operator_recovery_token=payload.get("operator_recovery_token"),
-        connector_registry=list(payload.get("connector_registry", [])),
+            api_key=payload.get("api_key") or os.environ.get("MOVA_API_KEY"),
+            base_url=payload.get("platform_url", payload.get("base_url", DEFAULT_BASE_URL)),
+            profile_id=payload.get("profile_id"),
+            default_owner_id=payload.get("default_owner_id"),
+            admin_read_token=payload.get("admin_read_token"),
+            runtime_execute_token=payload.get("runtime_execute_token"),
+            operator_recovery_token=payload.get("operator_recovery_token"),
+            connector_registry=list(payload.get("connector_registry", [])),
         )
 
-    # Local/dev smoke can override the API target without mutating user config.
-    config.base_url = os.environ.get("MOVA_BASE_URL", config.base_url or DEFAULT_BASE_URL)
+    config.api_key = config.api_key or os.environ.get("MOVA_API_KEY")
+    # `MOVA_PLATFORM_URL` is canonical; `MOVA_BASE_URL` remains a local/dev compatibility alias.
+    config.base_url = (
+        os.environ.get("MOVA_PLATFORM_URL")
+        or os.environ.get("MOVA_BASE_URL")
+        or config.base_url
+        or DEFAULT_BASE_URL
+    )
     return config
 
 

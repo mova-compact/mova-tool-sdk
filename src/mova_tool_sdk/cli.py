@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .client import MovaClient
 from .config import MovaConfig, load_config, save_config
-from .contracts import inspect_contract_package, load_package_projection, validate_contract_package
+from .contracts import inspect_contract_package, validate_contract_package
 
 
 def _client(config: MovaConfig, dry_run: bool) -> MovaClient:
@@ -32,6 +32,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     register = sub.add_parser("register")
     register.add_argument("--email", required=True)
+
+    publish = sub.add_parser("publish")
+    visibility = publish.add_mutually_exclusive_group(required=True)
+    visibility.add_argument("--private", action="store_true")
+    visibility.add_argument("--public", action="store_true")
+    publish.add_argument("path")
+    publish.add_argument("--owner-id")
 
     auth = sub.add_parser("auth")
     auth_sub = auth.add_subparsers(dest="auth_command")
@@ -64,14 +71,23 @@ def build_parser() -> argparse.ArgumentParser:
 
     status = sub.add_parser("status")
     status.add_argument("run_id")
+    status.add_argument("--watch", action="store_true")
 
     decide = sub.add_parser("decide")
     decide.add_argument("run_id")
     decide.add_argument("option")
     decide.add_argument("--reason", required=True)
 
+    decisions = sub.add_parser("decisions")
+    decisions_sub = decisions.add_subparsers(dest="decisions_command")
+    decisions_sub.add_parser("pending")
+
     audit = sub.add_parser("audit")
     audit.add_argument("run_id")
+    audit.add_argument("--compact", action="store_true")
+    audit.add_argument("--raw", action="store_true")
+    audit.add_argument("--export")
+    audit.add_argument("--verify", action="store_true")
 
     connectors = sub.add_parser("connectors")
     connectors_sub = connectors.add_subparsers(dest="connectors_command")
@@ -84,6 +100,14 @@ def build_parser() -> argparse.ArgumentParser:
     connectors_add.add_argument("--url", required=True)
     connectors_add.add_argument("--auth", required=True)
     connectors_add.add_argument("--token")
+    connectors_remove = connectors_sub.add_parser("remove")
+    connectors_remove.add_argument("connector_id")
+
+    contracts = sub.add_parser("contracts")
+    contracts_sub = contracts.add_subparsers(dest="contracts_command")
+    contracts_sub.add_parser("list")
+    contracts_pull = contracts_sub.add_parser("pull")
+    contracts_pull.add_argument("contract_id")
 
     usage = sub.add_parser("usage")
     usage.add_argument("--from")
@@ -93,6 +117,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     cost = sub.add_parser("cost")
     cost.add_argument("run_id")
+
+    runs = sub.add_parser("runs")
+    runs_sub = runs.add_subparsers(dest="runs_command")
+    runs_sub.add_parser("list")
 
     serve = sub.add_parser("serve")
     serve.add_argument("--mode", required=True)
@@ -107,6 +135,17 @@ def main() -> int:
 
     if args.command == "register":
         result = _client(config, args.dry_run).register(args.email)
+        return _print(result)
+
+    if args.command == "publish":
+        owner_id = args.owner_id or config.default_owner_id
+        if not owner_id:
+            return _print({"ok": False, "status": "missing_owner_id"})
+        result = _client(config, args.dry_run).publish_contract(
+            contract_path=args.path,
+            owner_id=owner_id,
+            public=bool(args.public),
+        )
         return _print(result)
 
     if args.command == "auth":
@@ -171,7 +210,6 @@ def main() -> int:
             input_payload = json.loads(args.input)
         elif args.input_file:
             input_payload = json.loads(Path(args.input_file).read_text(encoding="utf-8"))
-        projection = load_package_projection(contract_path) if contract_path else None
         payload = {
             "contract_path": contract_path,
             "contract_id": args.contract_id,
@@ -180,16 +218,33 @@ def main() -> int:
             "caller_id": args.caller_id,
             "tenant_id": args.tenant_id,
         }
-        return _print(_client(config, args.dry_run).execute_contract(**payload))
+        return _print(_client(config, args.dry_run).execute(**payload))
 
     if args.command == "status":
-        return _print(_client(config, args.dry_run).get_status(args.run_id))
+        result = _client(config, args.dry_run).get_run(args.run_id)
+        if args.watch:
+            result["watch"] = {"ok": True, "status": "scaffold", "message": "Watch mode is not wired yet."}
+        return _print(result)
 
     if args.command == "decide":
         return _print(_client(config, args.dry_run).decide(args.run_id, args.option, args.reason))
 
+    if args.command == "decisions":
+        if args.decisions_command == "pending":
+            return _print(_client(config, args.dry_run).pending_decisions())
+
     if args.command == "audit":
-        return _print(_client(config, args.dry_run).get_audit(args.run_id))
+        result = _client(config, args.dry_run).audit(args.run_id)
+        if args.verify:
+            result["verification"] = {"ok": True, "status": "scaffold", "message": "Compact integrity verification is not wired yet."}
+        if args.compact:
+            result["view"] = "compact"
+        elif args.raw:
+            result["view"] = "raw"
+        if args.export:
+            Path(args.export).write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+            result["exported_to"] = str(Path(args.export).resolve())
+        return _print(result)
 
     if args.command == "connectors":
         if args.connectors_command == "list":
@@ -210,6 +265,25 @@ def main() -> int:
             )
             save_config(config)
             return _print({"ok": True, "status": "saved", "connector_id": args.id})
+        if args.connectors_command == "remove":
+            before = len(config.connector_registry)
+            config.connector_registry = [
+                item for item in config.connector_registry if item.get("id") != args.connector_id
+            ]
+            save_config(config)
+            return _print(
+                {
+                    "ok": True,
+                    "status": "removed" if len(config.connector_registry) < before else "not_found",
+                    "connector_id": args.connector_id,
+                }
+            )
+
+    if args.command == "contracts":
+        if args.contracts_command == "list":
+            return _print(_client(config, args.dry_run).list_contracts())
+        if args.contracts_command == "pull":
+            return _print(_client(config, args.dry_run).pull_contract(args.contract_id))
 
     if args.command == "usage":
         return _print({"ok": True, "status": "scaffold", "from": args.__dict__.get("from"), "to": args.to})
@@ -219,6 +293,10 @@ def main() -> int:
 
     if args.command == "cost":
         return _print({"ok": True, "status": "scaffold", "run_id": args.run_id})
+
+    if args.command == "runs":
+        if args.runs_command == "list":
+            return _print(_client(config, args.dry_run).list_runs())
 
     if args.command == "serve":
         return _print({"ok": True, "status": "scaffold", "mode": args.mode, "message": "MCP/native tool mode is the next major slice."})

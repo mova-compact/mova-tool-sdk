@@ -85,8 +85,40 @@ class MovaClient:
         }
         return self._request("POST", "/v1/bridge/contracts/registrations", payload, scope="runtime_execute")
 
+    def publish_contract(
+        self,
+        contract_path: str,
+        owner_id: str,
+        *,
+        public: bool = False,
+    ) -> dict[str, object]:
+        visibility = "public" if public else "private"
+        requested_status = "public_active" if public else "private_active"
+        return self.register_contract_package(
+            contract_path=contract_path,
+            owner_id=owner_id,
+            visibility=visibility,
+            requested_status=requested_status,
+        )
+
+    def list_contracts(self) -> dict[str, object]:
+        return self._request("GET", "/v1/bridge/contracts", scope="admin_read")
+
+    def pull_contract(self, contract_id: str) -> dict[str, object]:
+        return self._request("GET", f"/v1/bridge/contracts/{contract_id}", scope="admin_read")
+
     def get_status(self, run_id: str) -> dict[str, object]:
         return self._request("GET", f"/v1/bridge/runs/{run_id}", scope="admin_read")
+
+    def get_run(self, run_id: str) -> dict[str, object]:
+        return self.get_status(run_id)
+
+    def list_runs(self) -> dict[str, object]:
+        return {
+            "ok": True,
+            "status": "scaffold",
+            "message": "Run listing will move to an SDK-native platform endpoint.",
+        }
 
     def run_registered_contract(
         self,
@@ -154,6 +186,25 @@ class MovaClient:
             run_result["registration"] = registration_result
         return run_result
 
+    def execute(
+        self,
+        *,
+        contract_path: str | None = None,
+        contract_id: str | None = None,
+        input_data: object | None = None,
+        owner_id: str | None = None,
+        caller_id: str = "caller.local",
+        tenant_id: str | None = None,
+    ) -> dict[str, object]:
+        return self.execute_contract(
+            contract_path=contract_path,
+            contract_id=contract_id,
+            input_data=input_data,
+            owner_id=owner_id,
+            caller_id=caller_id,
+            tenant_id=tenant_id,
+        )
+
     def decide(self, run_id: str, option: str, reason: str) -> dict[str, object]:
         normalized = option.strip().lower()
         if normalized not in {"approve", "approved", "deny", "denied", "reject"}:
@@ -177,6 +228,16 @@ class MovaClient:
 
     def get_audit(self, run_id: str) -> dict[str, object]:
         return self._request("GET", f"/v0/admin/audit/runs/{run_id}/export", scope="admin_read")
+
+    def audit(self, run_id: str) -> dict[str, object]:
+        return self.get_audit(run_id)
+
+    def pending_decisions(self) -> dict[str, object]:
+        return {
+            "ok": True,
+            "status": "scaffold",
+            "message": "Pending decision listing is not wired yet.",
+        }
 
     def register(self, email: str) -> dict[str, object]:
         return self._request("POST", "/v1/register", {"email": email})
