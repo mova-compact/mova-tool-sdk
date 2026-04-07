@@ -32,6 +32,38 @@ def test_forge_commit_advances_step():
     assert session.current_step()["step_id"] == "outcome"
 
 
+def test_forge_outcome_choice_rebuilds_verification_model():
+    session = start_forge(intent="triage support tickets")
+    session.commit("result-definition", "Bound the task first")
+    session.commit("decision_preparation", "Need a prepared decision packet")
+    codes = session.package_preview["verification_model_v0.json"]["verification_codes"]
+    assert codes[0]["code"] == "DECISION_READY"
+    assert session.contract_shape["terminal_outcomes"][0] == "PREPARED"
+
+
+def test_forge_strategy_choice_changes_execution_posture():
+    session = start_forge(intent="triage support tickets")
+    session.commit("result-definition", "Bound the task first")
+    session.commit("artifact_creation", "Need a concrete output")
+    session.commit("goal_plus_current_state", "Have current support state")
+    session.commit("rigid_plan", "Prefer deterministic execution")
+    assert session.contract_shape["source_execution_mode"] == "deterministic"
+    assert session.package_preview["runtime_manifest_v0.json"]["execution_mode"] == "SAFE_INTERNAL"
+
+
+def test_forge_decision_rights_choice_adds_human_gate():
+    session = start_forge(intent="crm sync")
+    session.commit("result-definition", "Bound the task first")
+    session.commit("state_change", "Need a CRM update")
+    session.commit("goal_plus_current_state", "Have current CRM state")
+    session.commit("adaptive_feedback", "Need flexible handling")
+    session.commit("combined_verification", "Need strong checks")
+    session.commit("risk_tolerance", "Need review at risky points")
+    session.commit("human_approves_final_only", "Human should approve the final change")
+    assert "connector.human.review" in session.contract_shape["service_bindings"]
+    assert session.package_preview["runtime_manifest_v0.json"]["capabilities"]["human_gated"] is True
+
+
 def test_forge_commitment_updates_visibility():
     session = start_forge(intent="triage support tickets")
     while session.current_step()["step_id"] != "commitment":
