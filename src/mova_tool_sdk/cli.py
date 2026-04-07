@@ -38,6 +38,7 @@ def _format_step_payload(session_id: str, step: dict[str, object], answers: dict
             "observation": step.get("observation"),
             "recommendation": step.get("recommendation"),
             "options": step.get("options", []),
+            "option_items": step.get("option_items", []),
         },
         "known_answers": answers,
         "contract_shape": step.get("contract_shape"),

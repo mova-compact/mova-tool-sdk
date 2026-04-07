@@ -135,6 +135,32 @@ CHOICE_ALIASES = {
 }
 
 
+def _choice_label(choice: str) -> str:
+    return choice.replace("_", " ").replace("-", " ").strip().capitalize()
+
+
+def _aliases_for_choice(step_id: str, choice: str) -> list[str]:
+    aliases = []
+    for alias, target in CHOICE_ALIASES.get(step_id, {}).items():
+        if target == choice:
+            aliases.append(alias)
+    return aliases
+
+
+def build_step_options(step_id: str, options: list[str]) -> list[dict[str, object]]:
+    items: list[dict[str, object]] = []
+    for index, choice in enumerate(options, start=1):
+        items.append(
+            {
+                "index": index,
+                "value": choice,
+                "label": _choice_label(choice),
+                "aliases": _aliases_for_choice(step_id, choice),
+            }
+        )
+    return items
+
+
 def _slugify(value: str) -> str:
     normalized = re.sub(r"[^a-zA-Z0-9]+", "_", value.strip().lower())
     normalized = re.sub(r"_+", "_", normalized).strip("_")
@@ -340,6 +366,7 @@ class ForgeSession:
             "observation": step["observation"],
             "recommendation": step["recommendation"],
             "options": step.get("options", []),
+            "option_items": build_step_options(step["step_id"], list(step.get("options", []))),
             "known_answers": self.answers,
             "contract_shape": self.contract_shape,
         }

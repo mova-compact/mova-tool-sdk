@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from mova_tool_sdk.forge import load_forge_session, normalize_choice, start_forge
+from mova_tool_sdk.forge import build_step_options, load_forge_session, normalize_choice, start_forge
 
 
 def test_start_forge_builds_contract_shape():
@@ -100,6 +100,14 @@ def test_normalize_choice_accepts_alias_and_index():
     options = ["artifact_creation", "state_change", "behavior_change", "decision_preparation"]
     assert normalize_choice("outcome", "artifact", options) == "artifact_creation"
     assert normalize_choice("outcome", "4", options) == "decision_preparation"
+
+
+def test_build_step_options_adds_labels_and_aliases():
+    items = build_step_options("outcome", ["artifact_creation", "decision_preparation"])
+    assert items[0]["index"] == 1
+    assert items[0]["label"] == "Artifact creation"
+    assert "artifact" in items[0]["aliases"]
+    assert items[1]["label"] == "Decision preparation"
 
 
 def test_start_forge_generates_package():
