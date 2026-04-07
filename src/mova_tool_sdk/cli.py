@@ -83,8 +83,27 @@ def build_parser() -> argparse.ArgumentParser:
     handoff.add_argument("--candidate-file")
     handoff.add_argument("--mode", choices=["guided", "direct"], default="guided")
 
+    forms = sub.add_parser("forms")
+    forms_sub = forms.add_subparsers(dest="forms_command")
+    forms_sub.add_parser("list")
+    form_get = forms_sub.add_parser("get")
+    form_get.add_argument("form_id")
+
     draft = sub.add_parser("draft")
     draft.add_argument("session_id")
+
+    authoring = sub.add_parser("authoring")
+    authoring_sub = authoring.add_subparsers(dest="authoring_command")
+    authoring_get = authoring_sub.add_parser("get")
+    authoring_get.add_argument("session_id")
+    authoring_answer = authoring_sub.add_parser("answer")
+    authoring_answer.add_argument("session_id")
+    authoring_answer.add_argument("field_id")
+    authoring_answer.add_argument("--value", required=True)
+    authoring_gap = authoring_sub.add_parser("gap-analysis")
+    authoring_gap.add_argument("session_id")
+    authoring_cancel = authoring_sub.add_parser("cancel")
+    authoring_cancel.add_argument("session_id")
 
     lab = sub.add_parser("lab")
     lab.add_argument("--draft-ref", required=True)
@@ -94,6 +113,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     lab_status = sub.add_parser("lab-status")
     lab_status.add_argument("lab_run_id")
+
+    evidence = sub.add_parser("evidence")
+    evidence_sub = evidence.add_subparsers(dest="evidence_command")
+    evidence_sub.add_parser("list")
+    evidence_get = evidence_sub.add_parser("get")
+    evidence_get.add_argument("evidence_id")
+    evidence_history = evidence_sub.add_parser("history")
+    evidence_history.add_argument("evidence_id")
+    evidence_lineage = evidence_sub.add_parser("lineage")
+    evidence_lineage.add_argument("evidence_id")
+    evidence_archive = evidence_sub.add_parser("archive")
+    evidence_archive.add_argument("evidence_id")
 
     promote = sub.add_parser("promote")
     promote.add_argument("--draft-ref", required=True)
@@ -207,8 +238,34 @@ def main() -> int:
             )
         )
 
+    if args.command == "forms":
+        client = _client(config, args.dry_run)
+        if args.forms_command == "list":
+            return _print(client.list_authoring_forms())
+        if args.forms_command == "get":
+            return _print(client.get_authoring_form(args.form_id))
+        return _print({"ok": False, "status": "missing_forms_command"})
+
     if args.command == "draft":
         return _print(_client(config, args.dry_run).emit_authoring_draft(args.session_id))
+
+    if args.command == "authoring":
+        client = _client(config, args.dry_run)
+        if args.authoring_command == "get":
+            return _print(client.get_authoring_session(args.session_id))
+        if args.authoring_command == "answer":
+            value: object
+            raw = args.value
+            try:
+                value = json.loads(raw)
+            except json.JSONDecodeError:
+                value = raw
+            return _print(client.answer_authoring_session(args.session_id, args.field_id, value))
+        if args.authoring_command == "gap-analysis":
+            return _print(client.gap_analysis_authoring_session(args.session_id))
+        if args.authoring_command == "cancel":
+            return _print(client.cancel_authoring_session(args.session_id))
+        return _print({"ok": False, "status": "missing_authoring_command"})
 
     if args.command == "lab":
         return _print(
@@ -224,6 +281,20 @@ def main() -> int:
 
     if args.command == "lab-status":
         return _print(_client(config, args.dry_run).get_lab_run(args.lab_run_id))
+
+    if args.command == "evidence":
+        client = _client(config, args.dry_run)
+        if args.evidence_command == "list":
+            return _print(client.list_lab_evidence())
+        if args.evidence_command == "get":
+            return _print(client.get_lab_evidence(args.evidence_id))
+        if args.evidence_command == "history":
+            return _print(client.get_lab_evidence_history(args.evidence_id))
+        if args.evidence_command == "lineage":
+            return _print(client.get_lab_evidence_lineage(args.evidence_id))
+        if args.evidence_command == "archive":
+            return _print(client.archive_lab_evidence(args.evidence_id))
+        return _print({"ok": False, "status": "missing_evidence_command"})
 
     if args.command == "promote":
         return _print(

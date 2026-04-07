@@ -224,10 +224,26 @@ class MovaClient:
             scope="runtime_execute",
         )
 
+    def gap_analysis_authoring_session(self, session_id: str) -> dict[str, object]:
+        return self._request(
+            "POST",
+            f"/v0/authoring/sessions/{session_id}/gap-analysis",
+            {},
+            scope="runtime_execute",
+        )
+
     def emit_authoring_draft(self, session_id: str) -> dict[str, object]:
         return self._request(
             "POST",
             f"/v0/authoring/sessions/{session_id}/emit-draft",
+            {},
+            scope="runtime_execute",
+        )
+
+    def cancel_authoring_session(self, session_id: str) -> dict[str, object]:
+        return self._request(
+            "POST",
+            f"/v0/authoring/sessions/{session_id}/cancel",
             {},
             scope="runtime_execute",
         )
@@ -248,6 +264,26 @@ class MovaClient:
 
     def get_lab_run(self, lab_run_id: str) -> dict[str, object]:
         return self._request("GET", f"/v0/lab/runs/{lab_run_id}", scope="admin_read")
+
+    def list_lab_evidence(self) -> dict[str, object]:
+        return self._request("GET", "/v0/lab/evidence", scope="admin_read")
+
+    def get_lab_evidence(self, evidence_id: str) -> dict[str, object]:
+        return self._request("GET", f"/v0/lab/evidence/{evidence_id}", scope="admin_read")
+
+    def get_lab_evidence_history(self, evidence_id: str) -> dict[str, object]:
+        return self._request("GET", f"/v0/lab/evidence/{evidence_id}/history", scope="admin_read")
+
+    def get_lab_evidence_lineage(self, evidence_id: str) -> dict[str, object]:
+        return self._request("GET", f"/v0/lab/evidence/{evidence_id}/lineage", scope="admin_read")
+
+    def archive_lab_evidence(self, evidence_id: str) -> dict[str, object]:
+        return self._request(
+            "POST",
+            f"/v0/lab/evidence/{evidence_id}/archive",
+            {},
+            scope="runtime_execute",
+        )
 
     def promote_lab_draft(
         self,

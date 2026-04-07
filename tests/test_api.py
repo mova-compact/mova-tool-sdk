@@ -33,6 +33,24 @@ def test_public_api_exposes_authoring_handoff_dry_run():
     assert result["prepared_request"]["url"].endswith("/v0/authoring/sessions")
 
 
+def test_public_api_exposes_authoring_form_listing_dry_run():
+    client = Mova(dry_run=True, api_key="demo")
+    result = client.list_authoring_forms()
+    assert result["ok"] is True
+    assert result["status"] == "dry-run"
+    assert result["prepared_request"]["url"].endswith("/v0/authoring/forms")
+
+
+def test_public_api_exposes_authoring_answer_and_gap_analysis_dry_run():
+    client = Mova(dry_run=True, api_key="demo")
+    answer_result = client.answer_authoring_session("session_demo", "title", "Demo title")
+    gap_result = client.gap_analysis_authoring_session("session_demo")
+    cancel_result = client.cancel_authoring_session("session_demo")
+    assert answer_result["prepared_request"]["url"].endswith("/v0/authoring/sessions/session_demo/answer")
+    assert gap_result["prepared_request"]["url"].endswith("/v0/authoring/sessions/session_demo/gap-analysis")
+    assert cancel_result["prepared_request"]["url"].endswith("/v0/authoring/sessions/session_demo/cancel")
+
+
 def test_public_api_exposes_authoring_handoff_from_candidate_envelope():
     client = Mova(dry_run=True, api_key="demo")
     forge = Forge(api_key="demo")
@@ -56,6 +74,20 @@ def test_public_api_exposes_lab_run_dry_run():
     assert result["ok"] is True
     assert result["status"] == "dry-run"
     assert result["prepared_request"]["url"].endswith("/v0/lab/runs")
+
+
+def test_public_api_exposes_lab_evidence_routes_dry_run():
+    client = Mova(dry_run=True, api_key="demo")
+    listed = client.list_lab_evidence()
+    item = client.get_lab_evidence("evidence_demo")
+    history = client.get_lab_evidence_history("evidence_demo")
+    lineage = client.get_lab_evidence_lineage("evidence_demo")
+    archived = client.archive_lab_evidence("evidence_demo")
+    assert listed["prepared_request"]["url"].endswith("/v0/lab/evidence")
+    assert item["prepared_request"]["url"].endswith("/v0/lab/evidence/evidence_demo")
+    assert history["prepared_request"]["url"].endswith("/v0/lab/evidence/evidence_demo/history")
+    assert lineage["prepared_request"]["url"].endswith("/v0/lab/evidence/evidence_demo/lineage")
+    assert archived["prepared_request"]["url"].endswith("/v0/lab/evidence/evidence_demo/archive")
 
 
 def test_admin_read_dry_run_can_prepare_gateway_headers(monkeypatch):

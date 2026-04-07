@@ -51,9 +51,12 @@ Current limitation:
 - `mova inspect`
 - `mova execute`
 - `mova handoff`
+- `mova forms list|get`
+- `mova authoring get|answer|gap-analysis|cancel`
 - `mova draft`
 - `mova lab`
 - `mova lab-status`
+- `mova evidence list|get|history|lineage|archive`
 - `mova promote`
 - `mova status`
 - `mova decide`
@@ -135,10 +138,13 @@ Current expected flow:
 
 Minimal platform continuation commands now map to existing routes:
 
+- `mova forms list|get` -> `GET /v0/authoring/forms*`
 - `mova handoff` -> `POST /v0/authoring/sessions`
+- `mova authoring get|answer|gap-analysis|cancel` -> `GET|POST /v0/authoring/sessions/*`
 - `mova draft` -> `POST /v0/authoring/sessions/:session_id/emit-draft`
 - `mova lab` -> `POST /v0/lab/runs`
 - `mova lab-status` -> `GET /v0/lab/runs/:lab_run_id`
+- `mova evidence list|get|history|lineage|archive` -> `GET|POST /v0/lab/evidence/*`
 - `mova promote` -> `POST /v0/lab/promote`
 
 `mova handoff` can now use either:
