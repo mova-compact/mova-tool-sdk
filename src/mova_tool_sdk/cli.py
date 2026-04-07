@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .client import MovaClient
 from .config import MovaConfig, load_config, save_config
-from .forge import load_forge_session, list_forge_sessions, start_forge
+from .forge import load_forge_session, list_forge_sessions, normalize_choice, start_forge
 from .contracts import inspect_contract_package, validate_contract_package
 
 
@@ -44,6 +44,7 @@ def _format_step_payload(session_id: str, step: dict[str, object], answers: dict
         "usage_hint": {
             "resume": f"mova forge resume {session_id}",
             "commit": f"mova forge commit {session_id} <choice> --reason \"...\"",
+            "generate": f"mova forge generate {session_id} --output ./my-contract",
         },
     }
 
@@ -90,6 +91,10 @@ def build_parser() -> argparse.ArgumentParser:
     forge_commit.add_argument("session_id")
     forge_commit.add_argument("choice")
     forge_commit.add_argument("--reason", required=True)
+    forge_generate = forge_sub.add_parser("generate")
+    forge_generate.add_argument("session_id")
+    forge_generate.add_argument("--output", required=True)
+    forge_generate.add_argument("--force", action="store_true")
     forge_sessions = forge_sub.add_parser("sessions")
     forge_sessions.add_argument("--all", action="store_true")
 
@@ -280,7 +285,19 @@ def main() -> int:
             return _print(_format_step_payload(session.session_id, step, session.answers))
         if forge_command == "commit":
             session = load_forge_session(args.session_id)
-            result = session.commit(args.choice, args.reason)
+            step = session.current_step()
+            try:
+                resolved_choice = normalize_choice(str(step.get("step_id")), args.choice, list(step.get("options", [])))
+            except ValueError as exc:
+                return _print(
+                    {
+                        "ok": False,
+                        "status": "invalid_choice",
+                        "error": str(exc),
+                        "step": step,
+                    }
+                )
+            result = session.commit(resolved_choice, args.reason)
             session_path = session.save()
             if session.is_complete():
                 result.update(
@@ -302,6 +319,28 @@ def main() -> int:
                     }
                 )
             return _print(result)
+        if forge_command == "generate":
+            session = load_forge_session(args.session_id)
+            if not session.is_complete() and not args.force:
+                return _print(
+                    {
+                        "ok": False,
+                        "status": "session_not_complete",
+                        "session_id": session.session_id,
+                        "current_step": session.current_step(),
+                        "hint": "Use --force only if you intentionally want to generate from an incomplete session.",
+                    }
+                )
+            generated = session.generate_package(args.output)
+            return _print(
+                {
+                    "ok": True,
+                    "status": "generated",
+                    "session_id": session.session_id,
+                    "from_complete_session": session.is_complete(),
+                    "package": generated,
+                }
+            )
         if forge_command == "sessions":
             items = list_forge_sessions()
             if not args.all:

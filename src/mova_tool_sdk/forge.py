@@ -82,6 +82,57 @@ STEP_OPTIONS = {
         "publish_public_later",
     ],
 }
+CHOICE_ALIASES = {
+    "problem_framing": {
+        "result": "result-definition",
+        "selection": "selection-filtering",
+    },
+    "outcome": {
+        "artifact": "artifact_creation",
+        "state": "state_change",
+        "behavior": "behavior_change",
+        "decision": "decision_preparation",
+    },
+    "reality": {
+        "goal-state": "goal_plus_current_state",
+        "goal-constraints": "goal_plus_constraints",
+        "goal-evidence": "goal_plus_evidence",
+    },
+    "strategy": {
+        "rigid": "rigid_plan",
+        "adaptive": "adaptive_feedback",
+        "deficit": "deficit_first",
+        "backwards": "outcome_backwards",
+    },
+    "verification": {
+        "artifact": "artifact_exists",
+        "behavior": "behavior_changed",
+        "review": "external_review",
+        "combined": "combined_verification",
+    },
+    "constraints": {
+        "legal": "legal_boundary",
+        "risk": "risk_tolerance",
+        "scope": "scope_boundary",
+    },
+    "decision_rights": {
+        "human-criteria": "human_decides_criteria_system_executes",
+        "human-final": "human_approves_final_only",
+        "system-filters": "system_filters_human_selects",
+        "guardrails": "system_local_autonomy_with_guardrails",
+    },
+    "uncertainty": {
+        "input": "input_incompleteness",
+        "environment": "environment_instability",
+        "subjective": "subjective_evaluation",
+        "resource": "resource_unpredictability",
+    },
+    "commitment": {
+        "private": "keep_private",
+        "register-private": "register_private_later",
+        "public": "publish_public_later",
+    },
+}
 
 
 def _slugify(value: str) -> str:
@@ -238,6 +289,26 @@ def _classify_intent(intent: str) -> dict[str, object]:
         "terminal_outcomes": terminal_outcomes,
         "verification_codes": verification_codes,
     }
+
+
+def normalize_choice(step_id: str, raw_choice: str, options: list[str]) -> str:
+    choice = raw_choice.strip()
+    if not choice:
+        raise ValueError("choice is empty")
+    if choice.isdigit():
+        index = int(choice) - 1
+        if 0 <= index < len(options):
+            return options[index]
+    if choice in options:
+        return choice
+    normalized = choice.replace(" ", "_").replace("-", "_")
+    for option in options:
+        if option.replace("-", "_") == normalized:
+            return option
+    alias = CHOICE_ALIASES.get(step_id, {}).get(choice.lower())
+    if alias and alias in options:
+        return alias
+    raise ValueError(f"unknown choice `{raw_choice}` for step `{step_id}`")
 
 
 @dataclass
