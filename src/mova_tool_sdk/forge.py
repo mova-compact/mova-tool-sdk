@@ -374,6 +374,65 @@ class ForgeSession:
     def is_complete(self) -> bool:
         return self.cursor >= len(self.steps)
 
+    def summary(self) -> dict[str, object]:
+        answered_steps: list[dict[str, object]] = []
+        for step in self.steps:
+            answer = self.answers.get(step["step_id"])
+            if not answer:
+                continue
+            choice = str(answer.get("choice", ""))
+            answered_steps.append(
+                {
+                    "step_id": step["step_id"],
+                    "label": step["step_id"].replace("_", " ").capitalize(),
+                    "choice": choice,
+                    "choice_label": _choice_label(choice),
+                    "reason": answer.get("reason", ""),
+                }
+            )
+
+        remaining_steps: list[dict[str, object]] = []
+        for step in self.steps[self.cursor :]:
+            remaining_steps.append(
+                {
+                    "step_id": step["step_id"],
+                    "label": step["step_id"].replace("_", " ").capitalize(),
+                }
+            )
+
+        source_contract = self.package_preview["source_contract_package_v0.json"]
+        runtime_manifest = self.package_preview["runtime_manifest_v0.json"]
+        current_step = None if self.is_complete() else self.current_step()
+        return {
+            "session_id": self.session_id,
+            "intent": self.intent,
+            "is_complete": self.is_complete(),
+            "progress": {
+                "answered_steps": len(answered_steps),
+                "remaining_steps": len(remaining_steps),
+                "total_steps": len(self.steps),
+            },
+            "current_step": None
+            if current_step is None
+            else {
+                "step_id": current_step.get("step_id"),
+                "label": str(current_step.get("step_id", "")).replace("_", " ").capitalize(),
+                "recommendation": current_step.get("recommendation"),
+            },
+            "decisions": answered_steps,
+            "remaining": remaining_steps,
+            "contract_snapshot": {
+                "contract_id": self.contract_shape["contract_id"],
+                "contract_class": self.contract_shape["contract_class"],
+                "source_execution_mode": self.contract_shape["source_execution_mode"],
+                "engine15_execution_mode": self.contract_shape["engine15_execution_mode"],
+                "required_inputs": list(self.contract_shape["required_inputs"]),
+                "service_bindings": list(self.contract_shape["service_bindings"]),
+                "visibility": source_contract.get("visibility"),
+                "runtime_status": runtime_manifest.get("status"),
+            },
+        }
+
     def commit(self, choice: str, reason: str) -> dict[str, object]:
         if self.is_complete():
             return {"ok": False, "status": "already_complete"}

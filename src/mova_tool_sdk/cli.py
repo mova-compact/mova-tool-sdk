@@ -88,6 +88,8 @@ def build_parser() -> argparse.ArgumentParser:
     forge_resume.add_argument("session_id")
     forge_next = forge_sub.add_parser("next")
     forge_next.add_argument("session_id")
+    forge_summary = forge_sub.add_parser("summary")
+    forge_summary.add_argument("session_id")
     forge_commit = forge_sub.add_parser("commit")
     forge_commit.add_argument("session_id")
     forge_commit.add_argument("choice")
@@ -284,6 +286,21 @@ def main() -> int:
                     }
                 )
             return _print(_format_step_payload(session.session_id, step, session.answers))
+        if forge_command == "summary":
+            session = load_forge_session(args.session_id)
+            summary = session.summary()
+            summary.update(
+                {
+                    "ok": True,
+                    "status": "complete" if session.is_complete() else "in_progress",
+                    "usage_hint": {
+                        "next": f"mova forge next {session.session_id}",
+                        "commit": f"mova forge commit {session.session_id} <choice> --reason \"...\"",
+                        "generate": f"mova forge generate {session.session_id} --output ./my-contract",
+                    },
+                }
+            )
+            return _print(summary)
         if forge_command == "commit":
             session = load_forge_session(args.session_id)
             step = session.current_step()

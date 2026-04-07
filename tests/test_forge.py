@@ -83,6 +83,27 @@ def test_forge_session_save_and_load():
     path.parent.rmdir()
 
 
+def test_forge_summary_reports_progress_and_snapshot():
+    session = start_forge(intent="triage support tickets")
+    session.commit("result-definition", "Need a bounded support triage contract")
+    summary = session.summary()
+    assert summary["progress"]["answered_steps"] == 1
+    assert summary["progress"]["remaining_steps"] == len(session.steps) - 1
+    assert summary["current_step"]["step_id"] == "outcome"
+    assert summary["contract_snapshot"]["contract_id"] == session.contract_shape["contract_id"]
+    assert summary["decisions"][0]["choice_label"] == "Result definition"
+
+
+def test_forge_summary_on_complete_session_has_no_current_step():
+    session = start_forge(intent="triage support tickets")
+    while not session.is_complete():
+        step = session.current_step()
+        session.commit(step["options"][0], "Progress to completion")
+    summary = session.summary()
+    assert summary["is_complete"] is True
+    assert summary["current_step"] is None
+
+
 def test_loaded_session_backfills_step_options():
     session = start_forge(intent="triage support tickets")
     path = session.save(Path("tests") / "_forge_sessions")
