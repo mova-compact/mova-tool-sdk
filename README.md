@@ -59,6 +59,8 @@ Current limitation:
 - `mova evidence list|get|history|lineage|archive`
 - `mova promote`
 - `mova contracts list|get|history|lineage|publish|deprecate|retire|reactivate`
+- `mova connectors list|get|add`
+- `mova bindings list|get|history|lineage|create|attach|rebind|activate|enable-steady-state|pause|disable`
 - `mova status`
 - `mova decide`
 - `mova audit`
@@ -148,6 +150,8 @@ Minimal platform continuation commands now map to existing routes:
 - `mova evidence list|get|history|lineage|archive` -> `GET|POST /v0/lab/evidence/*`
 - `mova promote` -> `POST /v0/lab/promote`
 - `mova contracts list|get|history|lineage|publish|deprecate|retire|reactivate` -> `GET|POST /v0/registry/contracts/*`
+- `mova connectors list|get|add` -> `GET|POST /v0/business/connectors*`
+- `mova bindings list|get|history|lineage|create|attach|rebind|activate|enable-steady-state|pause|disable` -> `GET|POST /v0/business/bindings*`
 
 `mova handoff` can now use either:
 

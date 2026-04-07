@@ -181,6 +181,139 @@ class MovaClient:
     def reactivate_contract(self, contract_id: str) -> dict[str, object]:
         return self._request("POST", f"/v0/registry/contracts/{contract_id}/reactivate", {}, scope="runtime_execute")
 
+    def list_business_connectors(self) -> dict[str, object]:
+        return self._request("GET", "/v0/business/connectors", scope="admin_read")
+
+    def get_business_connector(self, connector_id: str) -> dict[str, object]:
+        return self._request("GET", f"/v0/business/connectors/{connector_id}", scope="admin_read")
+
+    def create_business_connector(
+        self,
+        *,
+        connector_id: str,
+        title: str,
+        service_kind: str,
+        auth_mode: str,
+        supported_actions: list[str],
+        status: str = "active",
+        version: str = "1.0.0",
+        input_schema_ref: str | None = None,
+        output_schema_ref: str | None = None,
+        rate_limit_profile: dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        payload: dict[str, object] = {
+            "connector_id": connector_id,
+            "title": title,
+            "service_kind": service_kind,
+            "auth_mode": auth_mode,
+            "supported_actions": supported_actions,
+            "status": status,
+            "version": version,
+        }
+        if input_schema_ref:
+            payload["input_schema_ref"] = input_schema_ref
+        if output_schema_ref:
+            payload["output_schema_ref"] = output_schema_ref
+        if rate_limit_profile is not None:
+            payload["rate_limit_profile"] = rate_limit_profile
+        return self._request("POST", "/v0/business/connectors", payload, scope="runtime_execute")
+
+    def list_business_bindings(self) -> dict[str, object]:
+        return self._request("GET", "/v0/business/bindings", scope="admin_read")
+
+    def get_business_binding(self, binding_id: str) -> dict[str, object]:
+        return self._request("GET", f"/v0/business/bindings/{binding_id}", scope="admin_read")
+
+    def get_business_binding_history(self, binding_id: str) -> dict[str, object]:
+        return self._request("GET", f"/v0/business/bindings/{binding_id}/history", scope="admin_read")
+
+    def get_business_binding_lineage(self, binding_id: str) -> dict[str, object]:
+        return self._request("GET", f"/v0/business/bindings/{binding_id}/lineage", scope="admin_read")
+
+    def create_business_binding(
+        self,
+        *,
+        binding_id: str,
+        organization_ref: str,
+        contract_ref: str,
+        launch_profile_ref: str,
+        trigger: dict[str, object],
+        resource_bindings: list[object],
+        execution_mode: str,
+        status: str,
+        input_defaults: dict[str, object] | None = None,
+        policy_override_ref: str | None = None,
+    ) -> dict[str, object]:
+        payload: dict[str, object] = {
+            "binding_id": binding_id,
+            "organization_ref": organization_ref,
+            "contract_ref": contract_ref,
+            "launch_profile_ref": launch_profile_ref,
+            "trigger": trigger,
+            "resource_bindings": resource_bindings,
+            "execution_mode": execution_mode,
+            "status": status,
+        }
+        if input_defaults is not None:
+            payload["input_defaults"] = input_defaults
+        if policy_override_ref:
+            payload["policy_override_ref"] = policy_override_ref
+        return self._request("POST", "/v0/business/bindings", payload, scope="runtime_execute")
+
+    def attach_business_binding(self, binding_id: str, new_binding_id: str | None = None) -> dict[str, object]:
+        payload = {"new_binding_id": new_binding_id} if new_binding_id else {}
+        return self._request("POST", f"/v0/business/bindings/{binding_id}/attach", payload, scope="runtime_execute")
+
+    def rebind_business_binding(
+        self,
+        binding_id: str,
+        *,
+        new_binding_id: str | None = None,
+        organization_ref: str | None = None,
+        contract_ref: str | None = None,
+        launch_profile_ref: str | None = None,
+        trigger: dict[str, object] | None = None,
+        resource_bindings: list[object] | None = None,
+        input_defaults: dict[str, object] | None = None,
+        execution_mode: str | None = None,
+        policy_override_ref: str | None = None,
+        status: str | None = None,
+    ) -> dict[str, object]:
+        payload: dict[str, object] = {}
+        if new_binding_id:
+            payload["new_binding_id"] = new_binding_id
+        if organization_ref:
+            payload["organization_ref"] = organization_ref
+        if contract_ref:
+            payload["contract_ref"] = contract_ref
+        if launch_profile_ref:
+            payload["launch_profile_ref"] = launch_profile_ref
+        if trigger is not None:
+            payload["trigger"] = trigger
+        if resource_bindings is not None:
+            payload["resource_bindings"] = resource_bindings
+        if input_defaults is not None:
+            payload["input_defaults"] = input_defaults
+        if execution_mode:
+            payload["execution_mode"] = execution_mode
+        if policy_override_ref:
+            payload["policy_override_ref"] = policy_override_ref
+        if status:
+            payload["status"] = status
+        return self._request("POST", f"/v0/business/bindings/{binding_id}/rebind", payload, scope="runtime_execute")
+
+    def activate_business_binding(self, binding_id: str) -> dict[str, object]:
+        return self._request("POST", f"/v0/business/bindings/{binding_id}/activate", {}, scope="runtime_execute")
+
+    def enable_steady_state_business_binding(self, binding_id: str) -> dict[str, object]:
+        return self._request("POST", f"/v0/business/bindings/{binding_id}/enable-steady-state", {}, scope="runtime_execute")
+
+    def pause_business_binding(self, binding_id: str) -> dict[str, object]:
+        return self._request("POST", f"/v0/business/bindings/{binding_id}/pause", {}, scope="runtime_execute")
+
+    def disable_business_binding(self, binding_id: str) -> dict[str, object]:
+        return self._request("POST", f"/v0/business/bindings/{binding_id}/disable", {}, scope="runtime_execute")
+
     def get_status(self, run_id: str) -> dict[str, object]:
         return self._request("GET", f"/intake/runs/{run_id}", scope="admin_read")
 

@@ -110,6 +110,57 @@ def test_public_api_exposes_contract_registry_lifecycle_routes_dry_run():
     assert reactivated["prepared_request"]["url"].endswith("/v0/registry/contracts/pkg_demo_contract/reactivate")
 
 
+def test_public_api_exposes_business_connectors_routes_dry_run():
+    client = Mova(dry_run=True, api_key="demo")
+    listed = client.list_business_connectors()
+    item = client.get_business_connector("connector.demo.v1")
+    created = client.create_business_connector(
+        connector_id="connector.demo.v1",
+        title="Demo Connector",
+        service_kind="mcp_proxy",
+        auth_mode="bearer",
+        supported_actions=["invoke"],
+    )
+    assert listed["prepared_request"]["url"].endswith("/v0/business/connectors")
+    assert item["prepared_request"]["url"].endswith("/v0/business/connectors/connector.demo.v1")
+    assert created["prepared_request"]["url"].endswith("/v0/business/connectors")
+
+
+def test_public_api_exposes_business_bindings_routes_dry_run():
+    client = Mova(dry_run=True, api_key="demo")
+    listed = client.list_business_bindings()
+    item = client.get_business_binding("binding.demo.v1")
+    history = client.get_business_binding_history("binding.demo.v1")
+    lineage = client.get_business_binding_lineage("binding.demo.v1")
+    created = client.create_business_binding(
+        binding_id="binding.demo.v1",
+        organization_ref="org.demo",
+        contract_ref="pkg_demo_contract",
+        launch_profile_ref="profile.demo.v1",
+        trigger={"kind": "manual"},
+        resource_bindings=[],
+        execution_mode="DRAFT_REVIEW",
+        status="disabled",
+    )
+    attached = client.attach_business_binding("binding.demo.v1")
+    rebound = client.rebind_business_binding("binding.demo.v1", status="disabled")
+    activated = client.activate_business_binding("binding.demo.v1")
+    enabled = client.enable_steady_state_business_binding("binding.demo.v1")
+    paused = client.pause_business_binding("binding.demo.v1")
+    disabled = client.disable_business_binding("binding.demo.v1")
+    assert listed["prepared_request"]["url"].endswith("/v0/business/bindings")
+    assert item["prepared_request"]["url"].endswith("/v0/business/bindings/binding.demo.v1")
+    assert history["prepared_request"]["url"].endswith("/v0/business/bindings/binding.demo.v1/history")
+    assert lineage["prepared_request"]["url"].endswith("/v0/business/bindings/binding.demo.v1/lineage")
+    assert created["prepared_request"]["url"].endswith("/v0/business/bindings")
+    assert attached["prepared_request"]["url"].endswith("/v0/business/bindings/binding.demo.v1/attach")
+    assert rebound["prepared_request"]["url"].endswith("/v0/business/bindings/binding.demo.v1/rebind")
+    assert activated["prepared_request"]["url"].endswith("/v0/business/bindings/binding.demo.v1/activate")
+    assert enabled["prepared_request"]["url"].endswith("/v0/business/bindings/binding.demo.v1/enable-steady-state")
+    assert paused["prepared_request"]["url"].endswith("/v0/business/bindings/binding.demo.v1/pause")
+    assert disabled["prepared_request"]["url"].endswith("/v0/business/bindings/binding.demo.v1/disable")
+
+
 def test_admin_read_dry_run_can_prepare_gateway_headers(monkeypatch):
     monkeypatch.setenv("MCP_DOOR_GATEWAY_KEY_ID", "gw_test")
     monkeypatch.setenv("MCP_DOOR_GATEWAY_SHARED_SECRET", "secret_test")

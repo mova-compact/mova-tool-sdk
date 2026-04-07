@@ -150,6 +150,66 @@ def build_parser() -> argparse.ArgumentParser:
     contracts_reactivate = contracts_sub.add_parser("reactivate")
     contracts_reactivate.add_argument("contract_id")
 
+    connectors = sub.add_parser("connectors")
+    connectors_sub = connectors.add_subparsers(dest="connectors_command")
+    connectors_sub.add_parser("list")
+    connectors_get = connectors_sub.add_parser("get")
+    connectors_get.add_argument("connector_id")
+    connectors_add = connectors_sub.add_parser("add")
+    connectors_add.add_argument("--id", required=True)
+    connectors_add.add_argument("--title", required=True)
+    connectors_add.add_argument("--service-kind", required=True)
+    connectors_add.add_argument("--auth-mode", required=True)
+    connectors_add.add_argument("--actions", required=True)
+    connectors_add.add_argument("--status", default="active")
+    connectors_add.add_argument("--version", default="1.0.0")
+    connectors_add.add_argument("--input-schema-ref")
+    connectors_add.add_argument("--output-schema-ref")
+
+    bindings = sub.add_parser("bindings")
+    bindings_sub = bindings.add_subparsers(dest="bindings_command")
+    bindings_sub.add_parser("list")
+    bindings_get = bindings_sub.add_parser("get")
+    bindings_get.add_argument("binding_id")
+    bindings_history = bindings_sub.add_parser("history")
+    bindings_history.add_argument("binding_id")
+    bindings_lineage = bindings_sub.add_parser("lineage")
+    bindings_lineage.add_argument("binding_id")
+    bindings_create = bindings_sub.add_parser("create")
+    bindings_create.add_argument("--id", required=True)
+    bindings_create.add_argument("--organization-ref", required=True)
+    bindings_create.add_argument("--contract-ref", required=True)
+    bindings_create.add_argument("--launch-profile-ref", required=True)
+    bindings_create.add_argument("--trigger", required=True)
+    bindings_create.add_argument("--resource-bindings", required=True)
+    bindings_create.add_argument("--execution-mode", required=True)
+    bindings_create.add_argument("--status", required=True)
+    bindings_create.add_argument("--input-defaults")
+    bindings_create.add_argument("--policy-override-ref")
+    bindings_attach = bindings_sub.add_parser("attach")
+    bindings_attach.add_argument("binding_id")
+    bindings_attach.add_argument("--new-binding-id")
+    bindings_rebind = bindings_sub.add_parser("rebind")
+    bindings_rebind.add_argument("binding_id")
+    bindings_rebind.add_argument("--new-binding-id")
+    bindings_rebind.add_argument("--organization-ref")
+    bindings_rebind.add_argument("--contract-ref")
+    bindings_rebind.add_argument("--launch-profile-ref")
+    bindings_rebind.add_argument("--trigger")
+    bindings_rebind.add_argument("--resource-bindings")
+    bindings_rebind.add_argument("--input-defaults")
+    bindings_rebind.add_argument("--execution-mode")
+    bindings_rebind.add_argument("--policy-override-ref")
+    bindings_rebind.add_argument("--status")
+    bindings_activate = bindings_sub.add_parser("activate")
+    bindings_activate.add_argument("binding_id")
+    bindings_enable = bindings_sub.add_parser("enable-steady-state")
+    bindings_enable.add_argument("binding_id")
+    bindings_pause = bindings_sub.add_parser("pause")
+    bindings_pause.add_argument("binding_id")
+    bindings_disable = bindings_sub.add_parser("disable")
+    bindings_disable.add_argument("binding_id")
+
     return parser
 
 
@@ -343,6 +403,88 @@ def main() -> int:
         if args.contracts_command == "reactivate":
             return _print(client.reactivate_contract(args.contract_id))
         return _print({"ok": False, "status": "missing_contracts_command"})
+
+    if args.command == "connectors":
+        client = _client(config, args.dry_run)
+        if args.connectors_command == "list":
+            return _print(client.list_business_connectors())
+        if args.connectors_command == "get":
+            return _print(client.get_business_connector(args.connector_id))
+        if args.connectors_command == "add":
+            actions = [item.strip() for item in args.actions.split(",") if item.strip()]
+            return _print(
+                client.create_business_connector(
+                    connector_id=args.id,
+                    title=args.title,
+                    service_kind=args.service_kind,
+                    auth_mode=args.auth_mode,
+                    supported_actions=actions,
+                    status=args.status,
+                    version=args.version,
+                    input_schema_ref=args.input_schema_ref,
+                    output_schema_ref=args.output_schema_ref,
+                )
+            )
+        return _print({"ok": False, "status": "missing_connectors_command"})
+
+    if args.command == "bindings":
+        client = _client(config, args.dry_run)
+        if args.bindings_command == "list":
+            return _print(client.list_business_bindings())
+        if args.bindings_command == "get":
+            return _print(client.get_business_binding(args.binding_id))
+        if args.bindings_command == "history":
+            return _print(client.get_business_binding_history(args.binding_id))
+        if args.bindings_command == "lineage":
+            return _print(client.get_business_binding_lineage(args.binding_id))
+        if args.bindings_command == "create":
+            trigger = json.loads(args.trigger)
+            resource_bindings = json.loads(args.resource_bindings)
+            input_defaults = json.loads(args.input_defaults) if args.input_defaults else None
+            return _print(
+                client.create_business_binding(
+                    binding_id=args.id,
+                    organization_ref=args.organization_ref,
+                    contract_ref=args.contract_ref,
+                    launch_profile_ref=args.launch_profile_ref,
+                    trigger=trigger,
+                    resource_bindings=resource_bindings,
+                    execution_mode=args.execution_mode,
+                    status=args.status,
+                    input_defaults=input_defaults,
+                    policy_override_ref=args.policy_override_ref,
+                )
+            )
+        if args.bindings_command == "attach":
+            return _print(client.attach_business_binding(args.binding_id, args.new_binding_id))
+        if args.bindings_command == "rebind":
+            trigger = json.loads(args.trigger) if args.trigger else None
+            resource_bindings = json.loads(args.resource_bindings) if args.resource_bindings else None
+            input_defaults = json.loads(args.input_defaults) if args.input_defaults else None
+            return _print(
+                client.rebind_business_binding(
+                    args.binding_id,
+                    new_binding_id=args.new_binding_id,
+                    organization_ref=args.organization_ref,
+                    contract_ref=args.contract_ref,
+                    launch_profile_ref=args.launch_profile_ref,
+                    trigger=trigger,
+                    resource_bindings=resource_bindings,
+                    input_defaults=input_defaults,
+                    execution_mode=args.execution_mode,
+                    policy_override_ref=args.policy_override_ref,
+                    status=args.status,
+                )
+            )
+        if args.bindings_command == "activate":
+            return _print(client.activate_business_binding(args.binding_id))
+        if args.bindings_command == "enable-steady-state":
+            return _print(client.enable_steady_state_business_binding(args.binding_id))
+        if args.bindings_command == "pause":
+            return _print(client.pause_business_binding(args.binding_id))
+        if args.bindings_command == "disable":
+            return _print(client.disable_business_binding(args.binding_id))
+        return _print({"ok": False, "status": "missing_bindings_command"})
 
     if args.command == "status":
         result = _client(config, args.dry_run).get_run(args.run_id)
