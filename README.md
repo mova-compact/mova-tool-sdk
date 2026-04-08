@@ -38,7 +38,7 @@ Current live client targets are:
 Current limitation:
 
 - generic execution by platform `contract_id` is not exposed yet
-- the SDK can honestly execute from a local contract package path because it can derive `process_contract_ref` from `runtime_manifest_v0.json`
+- the SDK can honestly execute from a local contract package path because it can derive a runtime descriptor from the canonical package files
 - contract-id-first execution should only be added after `mcp_door` exposes a real runtime resolution route for it
 
 ## Current command groups
@@ -69,13 +69,14 @@ Current limitation:
 
 The SDK currently validates the following package files:
 
-- `source_contract_package_v0.json`
-- `runtime_manifest_v0.json`
-- `policy_calibration_v0.json`
-- `input_model_v0.json`
-- `verification_model_v0.json`
+- `manifest.json`
+- `flow.json`
+- `classification_policy.json`
+- `classification_results.json`
+- `runtime_binding_set.json`
+- `models/input_model_v0.json`
+- `models/verification_model_v0.json`
 - `README.md`
-- `execution_note.md`
 
 ## Status
 
@@ -123,7 +124,7 @@ session = forge.start(intent="automate invoice processing")
 `Forge` stays local and light. Its purpose is:
 
 - turn a business intent into a canonical candidate package
-- emit a platform-facing `sdk_local_candidate_handoff_v1` envelope
+- emit a platform-facing `sdk_local_candidate_handoff_v2` envelope
 - hand the candidate off into the real platform contour for authoring draft, lab testing, and promotion
 
 Example:
@@ -136,7 +137,7 @@ Current expected flow:
 
 1. `mova forge ...`
 2. receive candidate package locally
-3. hand off candidate into platform flow via `sdk_local_candidate_handoff_v1.json`
+3. hand off candidate into platform flow via `sdk_local_candidate_handoff_v2.json`
 4. platform performs authoring draft / lab / promotion
 
 Minimal platform continuation commands now map to existing routes:
@@ -156,4 +157,4 @@ Minimal platform continuation commands now map to existing routes:
 `mova handoff` can now use either:
 
 - `--intent "..."` for a raw direct handoff
-- `--candidate-file ./sdk_local_candidate_handoff_v1.json` for the canonical SDK-generated handoff envelope
+- `--candidate-file ./sdk_local_candidate_handoff_v2.json` for the canonical SDK-generated handoff envelope

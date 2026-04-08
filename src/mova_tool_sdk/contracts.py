@@ -6,13 +6,19 @@ from pathlib import Path
 
 
 REQUIRED_PACKAGE_FILES = [
-    "source_contract_package_v0.json",
-    "runtime_manifest_v0.json",
-    "policy_calibration_v0.json",
-    "input_model_v0.json",
-    "verification_model_v0.json",
+    "manifest.json",
+    "flow.json",
+    "classification_policy.json",
+    "classification_results.json",
+    "runtime_binding_set.json",
+    "models/input_model_v0.json",
+    "models/verification_model_v0.json",
     "README.md",
+]
+
+OPTIONAL_PACKAGE_FILES = [
     "execution_note.md",
+    "fixtures",
 ]
 
 
@@ -23,93 +29,191 @@ def package_root(path: str | Path) -> Path:
     return root
 
 
+def _load_json(path: Path) -> dict[str, object] | list[object]:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _parsed_package(root: Path) -> dict[str, object]:
+    manifest = _load_json(root / "manifest.json")
+    flow = _load_json(root / "flow.json")
+    classification_policy = _load_json(root / "classification_policy.json")
+    classification_results = _load_json(root / "classification_results.json")
+    runtime_binding_set = _load_json(root / "runtime_binding_set.json")
+    input_model = _load_json(root / "models" / "input_model_v0.json")
+    verification_model = _load_json(root / "models" / "verification_model_v0.json")
+    return {
+        "manifest": manifest,
+        "flow": flow,
+        "classification_policy": classification_policy,
+        "classification_results": classification_results,
+        "runtime_binding_set": runtime_binding_set,
+        "input_model_v0": input_model,
+        "verification_model_v0": verification_model,
+    }
+
+
 def validate_contract_package(path: str | Path) -> dict[str, object]:
     root = package_root(path)
     missing = [name for name in REQUIRED_PACKAGE_FILES if not (root / name).exists()]
-    parsed_files: dict[str, object] = {}
-    json_errors: list[dict[str, str]] = []
-    for name in REQUIRED_PACKAGE_FILES:
-        file_path = root / name
-        if not file_path.exists() or not name.endswith(".json"):
-            continue
-        try:
-            parsed_files[name] = json.loads(file_path.read_text(encoding="utf-8"))
-        except Exception as exc:  # pragma: no cover - surfaced to CLI
-            json_errors.append({"file": name, "error": str(exc)})
+    if missing:
+        return {
+            "ok": False,
+            "root": str(root),
+            "missing_files": missing,
+            "json_errors": [],
+            "checks": {},
+        }
 
-    source = parsed_files.get("source_contract_package_v0.json", {})
-    runtime = parsed_files.get("runtime_manifest_v0.json", {})
-    calibration = parsed_files.get("policy_calibration_v0.json", {})
+    json_errors: list[dict[str, str]] = []
+    try:
+        parsed = _parsed_package(root)
+    except Exception as exc:  # pragma: no cover - surfaced to CLI
+        json_errors.append({"file": "package", "error": str(exc)})
+        parsed = {}
+
+    manifest = parsed.get("manifest", {}) if isinstance(parsed, dict) else {}
+    flow = parsed.get("flow", {}) if isinstance(parsed, dict) else {}
+    classification_results = parsed.get("classification_results", [])
+    runtime_binding_set = parsed.get("runtime_binding_set", {})
+
+    contract_id = manifest.get("package_id") if isinstance(manifest, dict) else None
+    step_ids = []
+    if isinstance(flow, dict):
+        step_ids = [step.get("step_id") for step in flow.get("steps", []) if isinstance(step, dict)]
+
+    classified_step_ids = set()
+    if isinstance(classification_results, list):
+        classified_step_ids = {
+            item.get("step_id") for item in classification_results if isinstance(item, dict) and isinstance(item.get("step_id"), str)
+        }
+
+    bound_step_ids = set()
+    if isinstance(runtime_binding_set, dict):
+        bound_step_ids = {
+            item.get("step_id")
+            for item in runtime_binding_set.get("bindings", [])
+            if isinstance(item, dict) and isinstance(item.get("step_id"), str)
+        }
 
     checks = {
-        "contract_id_present": isinstance(source, dict) and isinstance(source.get("contract_id"), str),
-        "version_present": isinstance(source, dict) and isinstance(source.get("version"), str),
-        "runtime_process_contract_ref_present": isinstance(runtime, dict)
-        and isinstance(runtime.get("process_contract_ref"), str),
-        "runtime_executor_present": isinstance(runtime, dict) and isinstance(runtime.get("executor_ref"), str),
-        "calibration_executor_present": isinstance(calibration, dict)
-        and isinstance(calibration.get("executor_ref"), str),
+        "manifest_schema_id": isinstance(manifest, dict)
+        and manifest.get("schema_id") == "package.contract_package_manifest_v0",
+        "package_id_present": isinstance(contract_id, str) and len(contract_id) > 0,
+        "flow_id_matches_package": isinstance(flow, dict) and flow.get("flow_id") == contract_id,
+        "start_step_present": isinstance(flow, dict) and flow.get("start_step_id") in step_ids,
+        "all_steps_classified": bool(step_ids) and set(step_ids).issubset(classified_step_ids),
+        "all_steps_bound": bool(step_ids) and set(step_ids).issubset(bound_step_ids),
+        "readme_present": (root / "README.md").exists(),
     }
 
     return {
-        "ok": not missing and not json_errors and all(checks.values()),
+        "ok": not json_errors and all(checks.values()),
         "root": str(root),
         "missing_files": missing,
         "json_errors": json_errors,
         "checks": checks,
+        "optional_files_present": {
+            name: (root / name).exists() for name in OPTIONAL_PACKAGE_FILES
+        },
     }
 
 
 def inspect_contract_package(path: str | Path) -> dict[str, object]:
     root = package_root(path)
-    source = json.loads((root / "source_contract_package_v0.json").read_text(encoding="utf-8"))
-    runtime = json.loads((root / "runtime_manifest_v0.json").read_text(encoding="utf-8"))
-    calibration = json.loads((root / "policy_calibration_v0.json").read_text(encoding="utf-8"))
+    parsed = _parsed_package(root)
+    manifest = parsed["manifest"]
+    flow = parsed["flow"]
+    runtime_binding_set = parsed["runtime_binding_set"]
+    classification_results = parsed["classification_results"]
+    start_step_id = flow.get("start_step_id") if isinstance(flow, dict) else None
+    start_binding = None
+    if isinstance(runtime_binding_set, dict):
+        bindings = runtime_binding_set.get("bindings", [])
+        if isinstance(bindings, list):
+            start_binding = next(
+                (item for item in bindings if isinstance(item, dict) and item.get("step_id") == start_step_id),
+                bindings[0] if bindings else None,
+            )
     return {
         "root": str(root),
-        "contract_id": source.get("contract_id"),
-        "version": source.get("version"),
-        "title": source.get("title"),
-        "summary": source.get("summary"),
-        "service_bindings": source.get("service_bindings", []),
-        "required_inputs": source.get("required_inputs", []),
-        "process_contract_ref": runtime.get("process_contract_ref"),
-        "runtime_execution_mode": runtime.get("execution_mode"),
-        "executor_ref": runtime.get("executor_ref"),
-        "calibration_id": calibration.get("calibration_id"),
-        "calibration_execution_mode": calibration.get("engine15_execution_mode"),
+        "contract_id": manifest.get("package_id"),
+        "version": manifest.get("version"),
+        "flow_id": flow.get("flow_id") if isinstance(flow, dict) else None,
+        "start_step_id": start_step_id,
+        "terminal_statuses": flow.get("terminal_statuses", []) if isinstance(flow, dict) else [],
+        "classification_count": len(classification_results) if isinstance(classification_results, list) else 0,
+        "binding_count": len(runtime_binding_set.get("bindings", [])) if isinstance(runtime_binding_set, dict) else 0,
+        "execution_mode": start_binding.get("execution_mode") if isinstance(start_binding, dict) else None,
+        "binding_ref": start_binding.get("binding_ref") if isinstance(start_binding, dict) else None,
     }
 
 
 def load_package_projection(path: str | Path) -> dict[str, object]:
     root = package_root(path)
+    parsed = _parsed_package(root)
     return {
-        "source_contract_package": json.loads((root / "source_contract_package_v0.json").read_text(encoding="utf-8")),
-        "runtime_manifest": json.loads((root / "runtime_manifest_v0.json").read_text(encoding="utf-8")),
-        "policy_calibration": json.loads((root / "policy_calibration_v0.json").read_text(encoding="utf-8")),
+        "canonical_package": {
+            "manifest": parsed["manifest"],
+            "flow": parsed["flow"],
+            "classification_policy": parsed["classification_policy"],
+            "classification_results": parsed["classification_results"],
+            "runtime_binding_set": parsed["runtime_binding_set"],
+            "input_model_v0": parsed["input_model_v0"],
+            "verification_model_v0": parsed["verification_model_v0"],
+            "readme": (root / "README.md").read_text(encoding="utf-8"),
+        }
     }
 
 
-def load_source_contract_package(path: str | Path) -> dict[str, object]:
+def load_contract_manifest(path: str | Path) -> dict[str, object]:
     root = package_root(path)
-    return json.loads((root / "source_contract_package_v0.json").read_text(encoding="utf-8"))
+    return json.loads((root / "manifest.json").read_text(encoding="utf-8"))
 
 
-def load_runtime_manifest(path: str | Path) -> dict[str, object]:
+def load_runtime_descriptor(path: str | Path) -> dict[str, object]:
     root = package_root(path)
-    return json.loads((root / "runtime_manifest_v0.json").read_text(encoding="utf-8"))
+    manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+    flow = json.loads((root / "flow.json").read_text(encoding="utf-8"))
+    binding_set = json.loads((root / "runtime_binding_set.json").read_text(encoding="utf-8"))
+    step_id = flow.get("start_step_id", "execute_contract")
+    bindings = binding_set.get("bindings", [])
+    binding = next(
+        (item for item in bindings if isinstance(item, dict) and item.get("step_id") == step_id),
+        bindings[0] if bindings else {},
+    )
+    return {
+        "contract_id": manifest.get("package_id"),
+        "process_contract_ref": manifest.get("package_id"),
+        "execution_mode": binding.get("execution_mode"),
+        "binding_ref": binding.get("binding_ref"),
+        "runtime_binding_ref": binding.get("binding_id"),
+        "executor_ref": next(
+            (
+                item.split(":", 1)[1]
+                for item in binding.get("notes", [])
+                if isinstance(item, str) and item.startswith("derived_from_executor:")
+            ),
+            None,
+        ),
+        "engine_execution_mode": next(
+            (
+                item.split(":", 1)[1]
+                for item in binding.get("notes", [])
+                if isinstance(item, str) and item.startswith("derived_from_engine_mode:")
+            ),
+            None,
+        ),
+    }
 
 
 def build_package_ref(path: str | Path) -> dict[str, str]:
     root = package_root(path)
-    source_path = root / "source_contract_package_v0.json"
-    source_payload = json.loads(source_path.read_text(encoding="utf-8"))
-    contract_id = str(source_payload["contract_id"])
-    version = str(source_payload["version"])
-    hash_sha256 = hashlib.sha256(source_path.read_bytes()).hexdigest()
+    manifest_path = root / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    hash_sha256 = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
     return {
-        "package_id": contract_id,
-        "version": version,
+        "package_id": str(manifest["package_id"]),
+        "version": str(manifest["version"]),
         "hash_sha256": hash_sha256,
-        "source_uri": str(source_path),
+        "source_uri": str(manifest_path),
     }

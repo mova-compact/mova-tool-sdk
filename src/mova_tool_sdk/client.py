@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from urllib.parse import urlparse
 
 from .config import DEFAULT_BASE_URL
-from .contracts import load_runtime_manifest, load_source_contract_package
+from .contracts import load_package_projection, load_runtime_descriptor
 
 
 @dataclass
@@ -135,7 +135,7 @@ class MovaClient:
         visibility: str = "private",
         requested_status: str = "validated",
     ) -> dict[str, object]:
-        payload = load_source_contract_package(contract_path)
+        payload = load_package_projection(contract_path)
         payload["publisher_ref"] = owner_id
         payload["visibility"] = visibility
         payload["status"] = requested_status
@@ -347,7 +347,7 @@ class MovaClient:
         handoff_payload: dict[str, object],
         mode: str = "guided",
     ) -> dict[str, object]:
-        if handoff_payload.get("env_type") != "sdk_local_candidate_handoff_v1":
+        if handoff_payload.get("env_type") not in {"sdk_local_candidate_handoff_v1", "sdk_local_candidate_handoff_v2"}:
             return {"ok": False, "status": "invalid_handoff_env_type"}
         intent_context = handoff_payload.get("intent_context", {})
         raw_minimum_intent = ""
@@ -355,6 +355,12 @@ class MovaClient:
             raw_value = intent_context.get("raw_intent_text")
             if isinstance(raw_value, str):
                 raw_minimum_intent = raw_value
+        if not raw_minimum_intent:
+            handoff = handoff_payload.get("handoff", {})
+            if isinstance(handoff, dict):
+                raw_value = handoff.get("raw_minimum_intent")
+                if isinstance(raw_value, str):
+                    raw_minimum_intent = raw_value
         if not raw_minimum_intent:
             return {"ok": False, "status": "missing_raw_intent_text"}
         return self.create_authoring_session(
@@ -492,7 +498,7 @@ class MovaClient:
         resolved_execution_mode: str | None = None
         registration_result: dict[str, object] | None = None
         if contract_path:
-            runtime_manifest = load_runtime_manifest(contract_path)
+            runtime_manifest = load_runtime_descriptor(contract_path)
             registration_result = self.register_contract_package(
                 contract_path=contract_path,
                 owner_id=owner_id or "owner.local",
@@ -509,8 +515,8 @@ class MovaClient:
                 else None
             )
             resolved_execution_mode = (
-                runtime_manifest.get("execution_mode")
-                if isinstance(runtime_manifest.get("execution_mode"), str)
+                runtime_manifest.get("engine_execution_mode")
+                if isinstance(runtime_manifest.get("engine_execution_mode"), str)
                 else None
             )
 

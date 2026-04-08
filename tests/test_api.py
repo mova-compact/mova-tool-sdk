@@ -5,7 +5,7 @@ from mova_tool_sdk.forge import ForgeSession
 def test_public_api_exposes_mova_execute_dry_run():
     client = Mova(dry_run=True, api_key="demo")
     result = client.execute(
-        contract_path="D:/Projects_MOVA/_mova_meta/templates/contract_package_v0",
+        contract_path="D:/Projects_MOVA/mova-contract-spec/examples/invoice_processing_v0",
         tenant_id="tenant_demo_shop_v0",
         input_data={"file_url": "https://example.com/a.png"},
     )
@@ -62,6 +62,38 @@ def test_public_api_exposes_authoring_handoff_from_candidate_envelope():
     assert result["ok"] is True
     assert result["status"] == "dry-run"
     assert result["prepared_request"]["url"].endswith("/v0/authoring/sessions")
+
+
+def test_public_api_accepts_v2_candidate_file_shape():
+    client = Mova(dry_run=True, api_key="demo")
+    result = client.create_authoring_session_from_handoff(
+        form_ref="authoring_form_v0",
+        handoff_payload={
+            "env_type": "sdk_local_candidate_handoff_v2",
+            "actor_context": {"tenant_ref": "tenant_demo_shop_v0"},
+            "intent_context": {"raw_intent_text": "triage support tickets"},
+            "handoff": {
+                "target": "authoring",
+                "intent": "create_candidate_draft",
+                "raw_minimum_intent": "triage support tickets",
+            },
+            "candidate_package": {
+                "canonical_package": {
+                    "manifest": {
+                        "schema_id": "package.contract_package_manifest_v0",
+                        "package_id": "contract.demo.v0",
+                        "package_version": "0.1.0",
+                        "contract_id": "contract.demo.v0",
+                        "start_step_id": "route_ticket",
+                        "terminal_statuses": ["completed"],
+                        "files": {},
+                    }
+                }
+            },
+        },
+    )
+    assert result["ok"] is True
+    assert result["status"] == "dry-run"
 
 
 def test_public_api_exposes_lab_run_dry_run():
