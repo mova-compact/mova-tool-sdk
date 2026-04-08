@@ -62,6 +62,10 @@ def test_public_api_exposes_authoring_handoff_from_candidate_envelope():
     assert result["ok"] is True
     assert result["status"] == "dry-run"
     assert result["prepared_request"]["url"].endswith("/v0/authoring/sessions")
+    payload = result["prepared_request"]["payload"]
+    assert payload["seed_source"] == "sdk_local_candidate_handoff_v2"
+    assert payload["resolved_fields"]["contract_id"] == session.contract_shape["contract_id"]
+    assert "seed_canonical_package" in payload
 
 
 def test_public_api_accepts_v2_candidate_file_shape():
@@ -94,6 +98,9 @@ def test_public_api_accepts_v2_candidate_file_shape():
     )
     assert result["ok"] is True
     assert result["status"] == "dry-run"
+    payload = result["prepared_request"]["payload"]
+    assert payload["resolved_fields"]["contract_id"] == "contract.demo.v0"
+    assert payload["seed_canonical_package"]["manifest"]["package_id"] == "contract.demo.v0"
 
 
 def test_public_api_exposes_lab_run_dry_run():

@@ -14,6 +14,58 @@ from .config import DEFAULT_BASE_URL
 from .contracts import load_package_projection, load_runtime_descriptor
 
 
+def _as_record(value: object) -> dict[str, object] | None:
+    return value if isinstance(value, dict) else None
+
+
+def _as_list(value: object) -> list[object]:
+    return value if isinstance(value, list) else []
+
+
+def _handoff_seed_from_candidate(handoff_payload: dict[str, object]) -> dict[str, object] | None:
+    candidate_package = _as_record(handoff_payload.get("candidate_package"))
+    canonical_package = _as_record(candidate_package.get("canonical_package")) if candidate_package else None
+    if not canonical_package:
+        return None
+
+    manifest = _as_record(canonical_package.get("manifest")) or {}
+    flow = _as_record(canonical_package.get("flow")) or {}
+    classification_policy = _as_record(canonical_package.get("classification_policy")) or {}
+    runtime_binding_set = _as_record(canonical_package.get("runtime_binding_set")) or {}
+    intent_context = _as_record(handoff_payload.get("intent_context")) or {}
+
+    contract_id = str(manifest.get("package_id") or flow.get("flow_id") or "draft.contract")
+    raw_intent = str(intent_context.get("raw_intent_text") or "").strip()
+    summary = str(intent_context.get("goal_description") or flow.get("flow_intent") or raw_intent or contract_id)
+
+    bindings = [item for item in _as_list(runtime_binding_set.get("bindings")) if isinstance(item, dict)]
+    external_binding_refs = [
+        str(item.get("binding_ref"))
+        for item in bindings
+        if str(item.get("binding_kind") or "") == "mcp_tool_call" and str(item.get("binding_ref") or "").strip()
+    ]
+    execution_mode = next(
+        (
+            str(item.get("execution_mode"))
+            for item in bindings
+            if str(item.get("execution_mode") or "").strip()
+        ),
+        "DETERMINISTIC",
+    )
+
+    return {
+        "contract_id": contract_id,
+        "title": contract_id,
+        "summary": summary,
+        "intent_ref": f"intent://sdk-local/{contract_id}",
+        "policy_ref": str(classification_policy.get("policy_id") or "mova.step_classification_policy_v0"),
+        "transition_rule_ref": f"transition://{contract_id}/default",
+        "service_bindings": external_binding_refs,
+        "required_connections": external_binding_refs,
+        "execution_mode": execution_mode,
+    }
+
+
 @dataclass
 class MovaClient:
     api_key: str | None = None
@@ -332,12 +384,21 @@ class MovaClient:
         form_ref: str,
         raw_minimum_intent: str,
         mode: str = "guided",
+        resolved_fields: dict[str, object] | None = None,
+        seed_canonical_package: dict[str, object] | None = None,
+        seed_source: str | None = None,
     ) -> dict[str, object]:
         payload = {
             "mode": mode,
             "form_ref": form_ref,
             "raw_minimum_intent": raw_minimum_intent,
         }
+        if resolved_fields:
+            payload["resolved_fields"] = resolved_fields
+        if seed_canonical_package:
+            payload["seed_canonical_package"] = seed_canonical_package
+        if seed_source:
+            payload["seed_source"] = seed_source
         return self._request("POST", "/v0/authoring/sessions", payload, scope="runtime_execute")
 
     def create_authoring_session_from_handoff(
@@ -363,10 +424,16 @@ class MovaClient:
                     raw_minimum_intent = raw_value
         if not raw_minimum_intent:
             return {"ok": False, "status": "missing_raw_intent_text"}
+        seed_fields = _handoff_seed_from_candidate(handoff_payload)
+        candidate_package = _as_record(handoff_payload.get("candidate_package")) or {}
+        canonical_package = _as_record(candidate_package.get("canonical_package"))
         return self.create_authoring_session(
             form_ref=form_ref,
             raw_minimum_intent=raw_minimum_intent,
             mode=mode,
+            resolved_fields=seed_fields,
+            seed_canonical_package=canonical_package,
+            seed_source=str(handoff_payload.get("env_type") or "sdk_local_candidate_handoff"),
         )
 
     def get_authoring_session(self, session_id: str) -> dict[str, object]:

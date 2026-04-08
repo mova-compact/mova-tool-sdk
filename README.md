@@ -138,7 +138,10 @@ Current expected flow:
 1. `mova forge ...`
 2. receive candidate package locally
 3. hand off candidate into platform flow via `sdk_local_candidate_handoff_v2.json`
-4. platform performs authoring draft / lab / promotion
+4. the SDK seeds the authoring session with:
+   - `resolved_fields`
+   - `seed_canonical_package`
+5. platform performs authoring draft / lab / promotion
 
 Minimal platform continuation commands now map to existing routes:
 
