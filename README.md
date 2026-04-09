@@ -16,6 +16,11 @@ Current release state:
 - test suite is intended to run from a clean checkout without manual `PYTHONPATH` setup
 - the SDK is suitable for an early public beta with intentionally narrow scope
 
+Release docs:
+
+- [Release Notes 0.1.0 Beta](./RELEASE_NOTES_0.1.0-beta.md)
+- [Public Getting Started](./docs/PUBLIC_GETTING_STARTED.md)
+
 ## Current scope
 
 Version `0.1.0` starts with the shared base:
