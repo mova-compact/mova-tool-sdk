@@ -64,6 +64,26 @@ def build_parser() -> argparse.ArgumentParser:
     status = sub.add_parser("status")
     status.add_argument("run_id")
     status.add_argument("--watch", action="store_true")
+    status.add_argument(
+        "--view",
+        choices=[
+            "summary",
+            "artifacts",
+            "admission",
+            "dispatch",
+            "dry",
+            "internal",
+            "continuation",
+            "eligibility",
+            "access-grant",
+        ],
+        default="summary",
+    )
+
+    artifact = sub.add_parser("artifact")
+    artifact_sub = artifact.add_subparsers(dest="artifact_command")
+    artifact_get = artifact_sub.add_parser("get")
+    artifact_get.add_argument("artifact_id")
 
     decide = sub.add_parser("decide")
     decide.add_argument("run_id")
@@ -487,10 +507,34 @@ def main() -> int:
         return _print({"ok": False, "status": "missing_bindings_command"})
 
     if args.command == "status":
-        result = _client(config, args.dry_run).get_run(args.run_id)
+        client = _client(config, args.dry_run)
+        if args.view == "summary":
+            result = client.get_run(args.run_id)
+        elif args.view == "artifacts":
+            result = client.get_run_artifacts(args.run_id)
+        elif args.view == "admission":
+            result = client.get_run_admission_result(args.run_id)
+        elif args.view == "dispatch":
+            result = client.get_run_dispatch_result(args.run_id)
+        elif args.view == "dry":
+            result = client.get_run_execute_dry_result(args.run_id)
+        elif args.view == "internal":
+            result = client.get_run_execute_internal_result(args.run_id)
+        elif args.view == "continuation":
+            result = client.get_run_continuation_result(args.run_id)
+        elif args.view == "eligibility":
+            result = client.get_run_runtime_eligibility(args.run_id)
+        else:
+            result = client.get_run_access_grant(args.run_id)
         if args.watch:
             result["watch"] = {"ok": True, "status": "scaffold", "message": "Watch mode is not wired yet."}
         return _print(result)
+
+    if args.command == "artifact":
+        client = _client(config, args.dry_run)
+        if args.artifact_command == "get":
+            return _print(client.get_artifact(args.artifact_id))
+        return _print({"ok": False, "status": "missing_artifact_command"})
 
     if args.command == "decide":
         return _print(_client(config, args.dry_run).decide(args.run_id, args.option, args.reason))

@@ -37,6 +37,15 @@ Current live client targets are:
 - `GET /v0/registry/contracts/:contract_id`
 - `POST /intake/runs`
 - `GET /intake/runs/:run_id`
+- `GET /intake/runs/:run_id/artifacts`
+- `GET /intake/runs/:run_id/admission-result`
+- `GET /intake/runs/:run_id/dispatch-result`
+- `GET /intake/runs/:run_id/execute-dry-result`
+- `GET /intake/runs/:run_id/execute-internal-result`
+- `GET /intake/runs/:run_id/continuation-result`
+- `GET /intake/runs/:run_id/runtime-eligibility`
+- `GET /intake/runs/:run_id/access-grant`
+- `GET /artifacts/:artifact_id`
 - `POST /operator/runs/:run_id/approve`
 - `POST /operator/runs/:run_id/deny`
 - `GET /v0/admin/audit/runs/:run_id/export`
@@ -67,7 +76,8 @@ Current limitation:
 - `mova contracts list|get|history|lineage|publish|deprecate|retire|reactivate`
 - `mova connectors list|get|add`
 - `mova bindings list|get|history|lineage|create|attach|rebind|activate|enable-steady-state|pause|disable`
-- `mova status`
+- `mova status --view summary|artifacts|admission|dispatch|dry|internal|continuation|eligibility|access-grant`
+- `mova artifact get`
 - `mova decide`
 - `mova audit`
 
@@ -164,6 +174,8 @@ Minimal platform continuation commands now map to existing routes:
 - `mova contracts list|get|history|lineage|publish|deprecate|retire|reactivate` -> `GET|POST /v0/registry/contracts/*`
 - `mova connectors list|get|add` -> `GET|POST /v0/business/connectors*`
 - `mova bindings list|get|history|lineage|create|attach|rebind|activate|enable-steady-state|pause|disable` -> `GET|POST /v0/business/bindings*`
+- `mova status --view ...` -> `GET /intake/runs/:run_id*`
+- `mova artifact get` -> `GET /artifacts/:artifact_id`
 
 `mova handoff` can now use either:
 

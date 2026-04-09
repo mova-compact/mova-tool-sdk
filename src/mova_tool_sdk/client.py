@@ -372,6 +372,33 @@ class MovaClient:
     def get_run(self, run_id: str) -> dict[str, object]:
         return self.get_status(run_id)
 
+    def get_run_artifacts(self, run_id: str) -> dict[str, object]:
+        return self._request("GET", f"/intake/runs/{run_id}/artifacts", scope="admin_read")
+
+    def get_run_admission_result(self, run_id: str) -> dict[str, object]:
+        return self._request("GET", f"/intake/runs/{run_id}/admission-result", scope="admin_read")
+
+    def get_run_dispatch_result(self, run_id: str) -> dict[str, object]:
+        return self._request("GET", f"/intake/runs/{run_id}/dispatch-result", scope="admin_read")
+
+    def get_run_execute_dry_result(self, run_id: str) -> dict[str, object]:
+        return self._request("GET", f"/intake/runs/{run_id}/execute-dry-result", scope="admin_read")
+
+    def get_run_execute_internal_result(self, run_id: str) -> dict[str, object]:
+        return self._request("GET", f"/intake/runs/{run_id}/execute-internal-result", scope="admin_read")
+
+    def get_run_continuation_result(self, run_id: str) -> dict[str, object]:
+        return self._request("GET", f"/intake/runs/{run_id}/continuation-result", scope="admin_read")
+
+    def get_run_runtime_eligibility(self, run_id: str) -> dict[str, object]:
+        return self._request("GET", f"/intake/runs/{run_id}/runtime-eligibility", scope="admin_read")
+
+    def get_run_access_grant(self, run_id: str) -> dict[str, object]:
+        return self._request("GET", f"/intake/runs/{run_id}/access-grant", scope="admin_read")
+
+    def get_artifact(self, artifact_id: str) -> dict[str, object]:
+        return self._request("GET", f"/artifacts/{artifact_id}", scope="admin_read")
+
     def list_authoring_forms(self) -> dict[str, object]:
         return self._request("GET", "/v0/authoring/forms", scope="admin_read")
 

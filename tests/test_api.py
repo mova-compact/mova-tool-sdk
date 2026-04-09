@@ -200,6 +200,28 @@ def test_public_api_exposes_business_bindings_routes_dry_run():
     assert disabled["prepared_request"]["url"].endswith("/v0/business/bindings/binding.demo.v1/disable")
 
 
+def test_public_api_exposes_run_diagnostics_routes_dry_run():
+    client = Mova(dry_run=True, api_key="demo")
+    artifacts = client.get_run_artifacts("run_demo")
+    admission = client.get_run_admission_result("run_demo")
+    dispatch = client.get_run_dispatch_result("run_demo")
+    execute_dry = client.get_run_execute_dry_result("run_demo")
+    execute_internal = client.get_run_execute_internal_result("run_demo")
+    continuation = client.get_run_continuation_result("run_demo")
+    eligibility = client.get_run_runtime_eligibility("run_demo")
+    access_grant = client.get_run_access_grant("run_demo")
+    artifact = client.get_artifact("artifact_demo")
+    assert artifacts["prepared_request"]["url"].endswith("/intake/runs/run_demo/artifacts")
+    assert admission["prepared_request"]["url"].endswith("/intake/runs/run_demo/admission-result")
+    assert dispatch["prepared_request"]["url"].endswith("/intake/runs/run_demo/dispatch-result")
+    assert execute_dry["prepared_request"]["url"].endswith("/intake/runs/run_demo/execute-dry-result")
+    assert execute_internal["prepared_request"]["url"].endswith("/intake/runs/run_demo/execute-internal-result")
+    assert continuation["prepared_request"]["url"].endswith("/intake/runs/run_demo/continuation-result")
+    assert eligibility["prepared_request"]["url"].endswith("/intake/runs/run_demo/runtime-eligibility")
+    assert access_grant["prepared_request"]["url"].endswith("/intake/runs/run_demo/access-grant")
+    assert artifact["prepared_request"]["url"].endswith("/artifacts/artifact_demo")
+
+
 def test_admin_read_dry_run_can_prepare_gateway_headers(monkeypatch):
     monkeypatch.setenv("MCP_DOOR_GATEWAY_KEY_ID", "gw_test")
     monkeypatch.setenv("MCP_DOOR_GATEWAY_SHARED_SECRET", "secret_test")
