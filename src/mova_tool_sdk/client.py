@@ -13,6 +13,8 @@ from urllib.parse import urlparse
 from .config import DEFAULT_BASE_URL
 from .contracts import build_admission_candidate, load_package_projection, load_runtime_descriptor
 
+SDK_USER_AGENT = "mova-tool-sdk/0.1.0"
+
 
 def _as_record(value: object) -> dict[str, object] | None:
     return value if isinstance(value, dict) else None
@@ -142,7 +144,11 @@ class MovaClient:
         scope: str = "runtime_execute",
     ) -> dict[str, object]:
         url = f"{self.base_url.rstrip('/')}{path}"
-        headers = {"content-type": "application/json"}
+        headers = {
+            "content-type": "application/json",
+            "accept": "application/json",
+            "user-agent": SDK_USER_AGENT,
+        }
         prepared = {
             "method": method,
             "url": url,

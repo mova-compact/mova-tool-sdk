@@ -27,6 +27,8 @@ def test_public_api_exposes_identity_routes_dry_run():
     register = client.register("user@example.com")
     me = client.get_current_user()
     issue_key = client.create_api_key(["self_read", "runs_write"])
+    assert register["prepared_request"]["headers"]["user-agent"].startswith("mova-tool-sdk/")
+    assert register["prepared_request"]["headers"]["accept"] == "application/json"
     assert register["prepared_request"]["url"].endswith("/v1/register")
     assert register["prepared_request"]["payload"] == {"email": "user@example.com"}
     assert me["prepared_request"]["url"].endswith("/v1/me")
