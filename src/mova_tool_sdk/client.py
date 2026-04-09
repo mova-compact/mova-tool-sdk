@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from urllib.parse import urlparse
 
 from .config import DEFAULT_BASE_URL
-from .contracts import load_package_projection, load_runtime_descriptor
+from .contracts import build_admission_candidate, load_package_projection, load_runtime_descriptor
 
 
 def _as_record(value: object) -> dict[str, object] | None:
@@ -551,6 +551,30 @@ class MovaClient:
             payload["execution_mode"] = execution_mode
         return self._request("POST", "/intake/runs", payload, scope="runtime_execute")
 
+    def get_runtime_eligibility_descriptor(self, process_contract_ref: str) -> dict[str, object]:
+        return self._request(
+            "GET",
+            f"/registry/contracts/{process_contract_ref}/eligibility",
+            scope="admin_read",
+        )
+
+    def submit_run_admission(self, run_id: str, candidate: dict[str, object]) -> dict[str, object]:
+        return self._request(
+            "POST",
+            f"/intake/runs/{run_id}/admission",
+            candidate,
+            scope="runtime_execute",
+        )
+
+    def dispatch_run(self, run_id: str) -> dict[str, object]:
+        return self._request("POST", f"/intake/runs/{run_id}/dispatch", {}, scope="runtime_execute")
+
+    def execute_run_dry(self, run_id: str) -> dict[str, object]:
+        return self._request("POST", f"/intake/runs/{run_id}/execute-dry", {}, scope="runtime_execute")
+
+    def execute_run_internal(self, run_id: str) -> dict[str, object]:
+        return self._request("POST", f"/intake/runs/{run_id}/execute-internal", {}, scope="runtime_execute")
+
     def execute_contract(
         self,
         *,
@@ -563,19 +587,10 @@ class MovaClient:
     ) -> dict[str, object]:
         resolved_process_contract_ref: str | None = None
         resolved_execution_mode: str | None = None
+        admission_candidate: dict[str, object] | None = None
         registration_result: dict[str, object] | None = None
         if contract_path:
             runtime_manifest = load_runtime_descriptor(contract_path)
-            registration_result = self.register_contract_package(
-                contract_path=contract_path,
-                owner_id=owner_id or "owner.local",
-            )
-            if not registration_result.get("ok"):
-                return {
-                    "ok": False,
-                    "status": "registration_failed",
-                    "registration": registration_result,
-                }
             resolved_process_contract_ref = (
                 runtime_manifest.get("process_contract_ref")
                 if isinstance(runtime_manifest.get("process_contract_ref"), str)
@@ -586,20 +601,58 @@ class MovaClient:
                 if isinstance(runtime_manifest.get("engine_execution_mode"), str)
                 else None
             )
+            admission_candidate = build_admission_candidate(contract_path)
 
         if contract_id and not contract_path:
-            return {
-                "ok": False,
-                "status": "contract_id_execution_not_supported_yet",
-                "contract_id": contract_id,
-                "hint": "Use a local contract package path until the platform exposes contract_id to runtime resolution.",
-            }
+            resolved_process_contract_ref = contract_id
+            eligibility = self.get_runtime_eligibility_descriptor(contract_id)
+            if not eligibility.get("ok"):
+                return {
+                    "ok": False,
+                    "status": "runtime_descriptor_lookup_failed",
+                    "contract_id": contract_id,
+                    "eligibility": eligibility,
+                }
+            descriptor = eligibility.get("runtime_eligibility_descriptor", {})
+            if isinstance(descriptor, dict):
+                execution_mode = descriptor.get("execution_mode")
+                terminal_outcomes = descriptor.get("terminal_outcomes", [])
+                verification_ref = descriptor.get("verification_model_ref")
+                resolved_execution_mode = execution_mode if isinstance(execution_mode, str) else None
+                admission_candidate = {
+                    "artifact_id": contract_id,
+                    "artifact_type": "runtime_eligibility_descriptor",
+                    "execution_capable_target": True,
+                    "verification_predicate": {
+                        "defined": True,
+                        "ref": verification_ref if isinstance(verification_ref, str) else contract_id,
+                    },
+                    "terminal_semantics": {
+                        "defined": True,
+                        "allowed_outcomes": terminal_outcomes if isinstance(terminal_outcomes, list) else [],
+                    },
+                    "executability": {
+                        "defined": True,
+                        "runtime_confirmed": True,
+                    },
+                    "policy_admission": {
+                        "defined": True,
+                        "passed": True,
+                    },
+                    "invariant_admission": {
+                        "defined": True,
+                        "passed": True,
+                    },
+                }
 
         if not tenant_id:
             return {"ok": False, "status": "missing_tenant_id"}
 
         if not resolved_process_contract_ref:
             return {"ok": False, "status": "missing_process_contract_ref"}
+
+        if not admission_candidate:
+            return {"ok": False, "status": "missing_admission_candidate"}
 
         run_result = self.create_run(
             tenant_id=tenant_id,
@@ -608,8 +661,40 @@ class MovaClient:
             requested_surface="mova_tool_sdk",
             execution_mode=resolved_execution_mode,
         )
-        if registration_result:
-            run_result["registration"] = registration_result
+        if run_result.get("status") == "dry-run":
+            return run_result
+        if not run_result.get("ok"):
+            if registration_result:
+                run_result["registration"] = registration_result
+            return run_result
+
+        run = run_result.get("run", {})
+        run_id = run.get("run_id") if isinstance(run, dict) else None
+        if not isinstance(run_id, str) or not run_id:
+            run_result["status"] = "missing_run_id"
+            return run_result
+
+        admission_result = self.submit_run_admission(run_id, admission_candidate)
+        run_result["admission"] = admission_result
+        if not admission_result.get("ok"):
+            run_result["status"] = "admission_failed"
+            return run_result
+
+        dispatch_result = self.dispatch_run(run_id)
+        run_result["dispatch"] = dispatch_result
+        if not dispatch_result.get("ok"):
+            run_result["status"] = "dispatch_failed"
+            return run_result
+
+        dry_result = self.execute_run_dry(run_id)
+        run_result["dry_execution"] = dry_result
+        if not dry_result.get("ok"):
+            run_result["status"] = "dry_execution_failed"
+            return run_result
+
+        internal_result = self.execute_run_internal(run_id)
+        run_result["internal_execution"] = internal_result
+        run_result["status"] = "run_started" if internal_result.get("ok") else "internal_execution_failed"
         if caller_id:
             run_result["caller_id"] = caller_id
         return run_result

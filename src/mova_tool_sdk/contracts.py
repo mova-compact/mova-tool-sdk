@@ -217,3 +217,57 @@ def build_package_ref(path: str | Path) -> dict[str, str]:
         "hash_sha256": hash_sha256,
         "source_uri": str(manifest_path),
     }
+
+
+def build_admission_candidate(path: str | Path) -> dict[str, object]:
+    root = package_root(path)
+    parsed = _parsed_package(root)
+    manifest = parsed["manifest"]
+    flow = parsed["flow"]
+    runtime_binding_set = parsed["runtime_binding_set"]
+    verification_model = parsed["verification_model_v0"]
+
+    terminal_statuses = flow.get("terminal_statuses", []) if isinstance(flow, dict) else []
+    bindings = runtime_binding_set.get("bindings", []) if isinstance(runtime_binding_set, dict) else []
+    binding_refs = [
+        item.get("binding_ref")
+        for item in bindings
+        if isinstance(item, dict) and isinstance(item.get("binding_ref"), str) and item.get("binding_ref")
+    ]
+
+    verification_ref = None
+    if isinstance(verification_model, dict):
+        codes = verification_model.get("verification_codes")
+        if isinstance(codes, list) and codes:
+            first = next((item for item in codes if isinstance(item, dict) and isinstance(item.get("code"), str)), None)
+            if first is not None:
+                verification_ref = first["code"]
+    if not verification_ref and isinstance(manifest, dict):
+        verification_ref = manifest.get("package_id")
+
+    return {
+        "artifact_id": manifest.get("package_id"),
+        "artifact_type": "package.contract_package_manifest_v0",
+        "execution_capable_target": True,
+        "verification_predicate": {
+            "defined": True,
+            "ref": verification_ref,
+        },
+        "terminal_semantics": {
+            "defined": True,
+            "allowed_outcomes": terminal_statuses,
+        },
+        "executability": {
+            "defined": True,
+            "binding_refs": binding_refs,
+            "runtime_confirmed": True,
+        },
+        "policy_admission": {
+            "defined": True,
+            "passed": True,
+        },
+        "invariant_admission": {
+            "defined": True,
+            "passed": True,
+        },
+    }
