@@ -2,10 +2,10 @@ from mova_tool_sdk import Forge, Mova
 from mova_tool_sdk.forge import ForgeSession
 
 
-def test_public_api_exposes_mova_execute_dry_run():
+def test_public_api_exposes_mova_execute_dry_run(example_contract_package):
     client = Mova(dry_run=True, api_key="demo")
     result = client.execute(
-        contract_path="D:/Projects_MOVA/mova-contract-spec/examples/invoice_processing_v0",
+        contract_path=str(example_contract_package),
         tenant_id="tenant_demo_shop_v0",
         input_data={"file_url": "https://example.com/a.png"},
     )

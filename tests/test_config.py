@@ -34,5 +34,6 @@ def test_load_config_accepts_existing_mcp_door_url_alias(monkeypatch):
 
 
 def test_mova_home_uses_env_override(monkeypatch):
-    monkeypatch.setenv("MOVA_HOME", "D:/Projects_MOVA/_mova_meta/tmp/mova_home_test")
-    assert str(mova_home()).endswith("D:\\Projects_MOVA\\_mova_meta\\tmp\\mova_home_test")
+    override = Path("tests") / "_tmp_mova_home_test"
+    monkeypatch.setenv("MOVA_HOME", str(override))
+    assert mova_home() == override.expanduser().resolve()
