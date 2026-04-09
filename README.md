@@ -10,6 +10,12 @@ Python-first MOVA SDK scaffold.
 
 This repo is intentionally separate from the legacy `mova_sdk` and from `mova-bridge`.
 
+Current release state:
+
+- package build is working
+- test suite is intended to run from a clean checkout without manual `PYTHONPATH` setup
+- the SDK is suitable for an early public beta with intentionally narrow scope
+
 ## Current scope
 
 Version `0.1.0` starts with the shared base:
@@ -91,6 +97,8 @@ Canonical config/env language now follows the SDK spec:
 
 - `MOVA_API_KEY`
 - `MOVA_PLATFORM_URL`
+
+See [.env.example](/d:/Projects_MOVA/mova-tool-sdk/.env.example) for a minimal local bootstrap shape.
 
 Local/dev compatibility aliases are still accepted:
 
