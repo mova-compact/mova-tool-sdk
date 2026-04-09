@@ -781,3 +781,12 @@ class MovaClient:
 
     def register(self, email: str) -> dict[str, object]:
         return self._request("POST", "/v1/register", {"email": email})
+
+    def get_current_user(self) -> dict[str, object]:
+        return self._request("GET", "/v1/me")
+
+    def create_api_key(self, allowed_scopes: list[str] | None = None) -> dict[str, object]:
+        payload: dict[str, object] = {}
+        if allowed_scopes is not None:
+            payload["allowed_scopes"] = allowed_scopes
+        return self._request("POST", "/v1/api-keys", payload)

@@ -22,6 +22,18 @@ def test_public_api_exposes_forge_stub():
     assert session.crystallized_intent["status"] == "candidate_ready"
 
 
+def test_public_api_exposes_identity_routes_dry_run():
+    client = Mova(dry_run=True, api_key="demo")
+    register = client.register("user@example.com")
+    me = client.get_current_user()
+    issue_key = client.create_api_key(["self_read", "runs_write"])
+    assert register["prepared_request"]["url"].endswith("/v1/register")
+    assert register["prepared_request"]["payload"] == {"email": "user@example.com"}
+    assert me["prepared_request"]["url"].endswith("/v1/me")
+    assert issue_key["prepared_request"]["url"].endswith("/v1/api-keys")
+    assert issue_key["prepared_request"]["payload"] == {"allowed_scopes": ["self_read", "runs_write"]}
+
+
 def test_public_api_exposes_authoring_handoff_dry_run():
     client = Mova(dry_run=True, api_key="demo")
     result = client.create_authoring_session(

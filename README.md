@@ -33,6 +33,9 @@ The SDK now follows the real `mcp_door` contour instead of the earlier temporary
 
 Current live client targets are:
 
+- `POST /v1/register`
+- `GET /v1/me`
+- `POST /v1/api-keys`
 - `POST /v0/registry/contracts`
 - `GET /v0/registry/contracts/:contract_id`
 - `POST /intake/runs`
@@ -59,6 +62,9 @@ Current limitation:
 ## Current command groups
 
 - `mova auth set-key`
+- `mova auth register`
+- `mova auth me`
+- `mova auth issue-key`
 - `mova auth check`
 - `mova auth whoami`
 - `mova forge`
@@ -116,6 +122,21 @@ Local/dev compatibility aliases are still accepted:
 - `MOVA_RUNTIME_EXECUTE_TOKEN`
 - `MOVA_ADMIN_READ_TOKEN`
 - `MOVA_OPERATOR_RECOVERY_TOKEN`
+
+## Public Identity Beta
+
+The deployed public beta identity surface is now part of the SDK:
+
+- `mova auth register <email>`
+- `mova auth me`
+- `mova auth issue-key`
+
+Useful shortcuts:
+
+- `mova auth register <email> --set-key`
+  Stores the returned personal API key into local SDK config.
+- `mova auth issue-key --scopes self_read,runs_write --set-key`
+  Mints a narrower personal API key and makes it the active local key.
 
 ## Public Python API direction
 

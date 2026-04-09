@@ -38,6 +38,16 @@ def build_parser() -> argparse.ArgumentParser:
     auth_scope = auth_sub.add_parser("set-scope-token")
     auth_scope.add_argument("scope", choices=["admin_read", "runtime_execute", "operator_recovery"])
     auth_scope.add_argument("token")
+    auth_register = auth_sub.add_parser("register")
+    auth_register.add_argument("email")
+    auth_register.add_argument("--set-key", action="store_true")
+    auth_sub.add_parser("me")
+    auth_issue_key = auth_sub.add_parser("issue-key")
+    auth_issue_key.add_argument(
+        "--scopes",
+        help="Comma-separated personal API key scopes. Defaults to the platform default scope set.",
+    )
+    auth_issue_key.add_argument("--set-key", action="store_true")
     auth_sub.add_parser("check")
     auth_sub.add_parser("whoami")
 
@@ -252,6 +262,31 @@ def main() -> int:
                 config.operator_recovery_token = args.token
             save_config(config)
             return _print({"ok": True, "status": "saved", "scope": args.scope})
+        if args.auth_command == "register":
+            result = _client(config, args.dry_run).register(args.email)
+            if args.set_key and result.get("ok") is True:
+                api_key = result.get("api_key")
+                token = api_key.get("token") if isinstance(api_key, dict) else None
+                if isinstance(token, str) and token:
+                    config.api_key = token
+                    save_config(config)
+                    result["config_updated"] = True
+            return _print(result)
+        if args.auth_command == "me":
+            return _print(_client(config, args.dry_run).get_current_user())
+        if args.auth_command == "issue-key":
+            scopes = None
+            if args.scopes:
+                scopes = [item.strip() for item in args.scopes.split(",") if item.strip()]
+            result = _client(config, args.dry_run).create_api_key(scopes)
+            if args.set_key and result.get("ok") is True:
+                api_key = result.get("api_key")
+                token = api_key.get("token") if isinstance(api_key, dict) else None
+                if isinstance(token, str) and token:
+                    config.api_key = token
+                    save_config(config)
+                    result["config_updated"] = True
+            return _print(result)
         if args.auth_command == "check":
             return _print(
                 {
